@@ -129,6 +129,15 @@ def informar_saldo(conta_id, d: date, valor: float):
                    on conflict (conta_id, data) do update set valor = excluded.valor""", c=conta_id, d=d, v=valor)
 
 
+def saldo_informado(conta_id, d: date) -> float | None:
+    r = db.um("select valor from saldos where conta_id = :c and data = :d", c=conta_id, d=d)
+    return float(r["valor"]) if r else None
+
+
+def remover_saldo(conta_id, d: date):
+    db.executar("delete from saldos where conta_id = :c and data = :d", c=conta_id, d=d)
+
+
 def extrato(u, conta_ids: list, ini: date, fim: date) -> tuple[float, pd.DataFrame]:
     """(saldo no dia anterior a ini, linhas com saldo acumulado). Saldos informados no meio do período
     entram como 'Ajuste' para o acumulado bater com o banco."""
