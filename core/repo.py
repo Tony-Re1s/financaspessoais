@@ -215,6 +215,36 @@ def mudar_status(u, ids: list, status: str):
                 st=status, uid=u["id"], ids=[str(i) for i in ids])
 
 
+def lancamento(u, lanc_id) -> dict | None:
+    return db.um("""select id, conta_id, conta_destino_id, categoria_id, tipo::text as tipo, descricao, valor,
+                           data_compra, data_vencimento, data_pagamento, forma_pagamento, status::text as status,
+                           parcela_num, parcela_total, grupo_parcela, recorrencia_id, observacao, origem::text as origem
+                      from lancamentos where id = :id and dono_id = :uid""", id=lanc_id, uid=u["id"])
+
+
+def atualizar_lancamento(u, lanc_id, d: dict, parcelas_futuras=False):
+    """Edita um lançamento. Com parcelas_futuras, descrição/categoria/valor também nas parcelas seguintes."""
+    with db.transacao() as s:
+        s.execute(text("""update lancamentos set descricao = :descricao, valor = :valor, categoria_id = :categoria_id,
+                             conta_id = :conta_id, data_compra = :data_compra, data_vencimento = :data_vencimento,
+                             status = cast(:status as status_lancamento),
+                             data_pagamento = case when :status = 'pago'
+                                                   then coalesce(data_pagamento, :data_vencimento) end,
+                             atualizado_em = now()
+                           where id = :id and dono_id = :uid"""),
+                  {k: d.get(k) for k in ["descricao", "valor", "categoria_id", "conta_id", "data_compra",
+                                         "data_vencimento", "status"]} | {"id": lanc_id, "uid": u["id"]})
+        if parcelas_futuras:
+            s.execute(text("""update lancamentos x set descricao = :descricao, valor = :valor,
+                                 categoria_id = :categoria_id, atualizado_em = now()
+                                from lancamentos l
+                               where l.id = :id and l.dono_id = :uid and l.grupo_parcela is not null
+                                 and x.grupo_parcela = l.grupo_parcela and x.dono_id = :uid
+                                 and x.parcela_num > l.parcela_num"""),
+                      {"descricao": d["descricao"], "valor": d["valor"], "categoria_id": d.get("categoria_id"),
+                       "id": lanc_id, "uid": u["id"]})
+
+
 def excluir(u, ids: list, parcelas_futuras=False):
     ids = [str(i) for i in ids]
     if parcelas_futuras:

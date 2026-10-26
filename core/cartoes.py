@@ -4,7 +4,7 @@ from __future__ import annotations
 import pandas as pd
 
 from core import db
-from core.fmt import dia_no_mes, hoje, mes_ref
+from core.fmt import dia_no_mes, hoje, mes_ref, somar_meses
 
 
 def faturas(u) -> pd.DataFrame:
@@ -57,12 +57,36 @@ def resumo(u, faturas_df: pd.DataFrame | None = None) -> pd.DataFrame:
 
 
 def itens(u, cartao_id, mes: int) -> pd.DataFrame:
-    return db.consultar("""
+    """Lançamentos de uma fatura, com o grupo para a tela: parcela, assinatura (repete todo mês) ou compra."""
+    df = db.consultar("""
+        with rep as (select lower(descricao) d, valor v, count(distinct mes_ref) n, max(mes_ref) ultimo from lancamentos
+                      where dono_id = :u and conta_id = :c and status <> 'cancelado' and parcela_num is null
+                      group by 1, 2)
         select l.id, l.data_compra, l.descricao, l.parcela_num, l.parcela_total, l.valor, l.tipo::text as tipo,
-               l.status::text as status, coalesce(c.nome, 'Sem categoria') as categoria, l.origem::text as origem
+               l.status::text as status, coalesce(c.nome, 'Sem categoria') as categoria, p.nome as categoria_pai,
+               l.origem::text as origem,
+               case when l.parcela_num is not null then 'Parcelas'
+                    when l.recorrencia_id is not null then 'Assinaturas'
+                    when coalesce(rep.n, 0) >= 3 and rep.ultimo < :lim then 'Parcelas'
+                    when coalesce(rep.n, 0) >= 3 then 'Assinaturas'
+                    else 'Compras' end as grupo,
+               rep.ultimo as ultimo_mes
           from lancamentos l left join categorias c on c.id = l.categoria_id
+          left join categorias p on p.id = c.pai_id
+          left join rep on rep.d = lower(l.descricao) and rep.v = l.valor
          where l.dono_id = :u and l.conta_id = :c and l.mes_ref = :m and l.status <> 'cancelado'
-         order by l.data_compra nulls last, l.descricao""", u=u["id"], c=cartao_id, m=mes)
+         order by l.valor desc""", u=u["id"], c=cartao_id, m=mes, lim=somar_meses(mes_ref(hoje()), 11))
+    return df
+
+
+def pago_no_mes(u, mes: int) -> float:
+    """Quanto saiu das contas para pagar faturas no mês (transferências para cartões vindas dos extratos)."""
+    r = db.um("""select coalesce(sum(l.valor), 0) as v from lancamentos l left join contas c on c.id = l.conta_destino_id
+                  where l.dono_id = :u and l.tipo = 'transferencia'
+                    and (c.tipo = 'cartao_credito' or l.descricao ilike 'Pagamento de fatura%%')
+                    and to_char(coalesce(l.data_pagamento, l.data_vencimento), 'YYYYMM')::int = :m""",
+              u=u["id"], m=mes)
+    return float(r["v"]) if r else 0.0
 
 
 def marcar_fatura(u, cartao_id, mes: int, paga: bool, data_pag=None):
