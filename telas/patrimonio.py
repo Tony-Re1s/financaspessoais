@@ -22,7 +22,9 @@ tem = float(comp.loc[comp["valor"] > 0, "valor"].sum()) if not comp.empty else 0
 deve = float(-comp.loc[comp["valor"] < 0, "valor"].sum()) if not comp.empty else 0.0
 ant = patrimonio.mes_anterior(u)
 cartoes_kpi([("Patrimônio líquido", brl(tem - deve)), ("O que você tem", brl(tem)), ("O que você deve", brl(deve)),
-             ("Variação no mês", brl(tem - deve - ant) if ant is not None else "—")])
+             ("Variação no mês", brl(tem - deve - ant) if ant is not None else "—"),
+             ("Dívida / bens", f"{deve / tem:.0%}" if tem else "—")],
+            titulo="Patrimônio", icone="🏛️", c1="#272B66", c2="#4E57B5")
 
 # --- composição --------------------------------------------------------------------------------
 if comp.empty:
@@ -38,7 +40,8 @@ else:
                     color=alt.condition("datum.valor < 0", alt.value("#d9534f"), alt.value("#2e8b57")),
                     tooltip=[alt.Tooltip("grupo:N", title=""), alt.Tooltip("valor:Q", title="R$", format=",.2f")])
             .properties(height=40 * len(g) + 20))
-    st.altair_chart(graf, use_container_width=True)
+    with st.container(border=True):
+        st.altair_chart(graf, use_container_width=True)
     with st.expander("Ver item a item"):
         st.dataframe(em_reais(comp), hide_index=True, use_container_width=True,
                      column_config={"grupo": "Grupo", "item": "Item", "valor": col_rs()})
@@ -59,11 +62,11 @@ else:
 st.subheader("Bens")
 b = patrimonio.bens(u)
 for r in b.itertuples():
-    with st.container(border=True):
-        st.markdown(f"**{r.descricao}**")
-        k = [("Valor", brl(r.valor)), ("Já pago", brl(r.pago)), ("Ainda deve", brl(r.divida)),
-             ("Seu patrimônio nele", brl(r.valor - r.divida))]
-        cartoes_kpi(k)
+    with st.container():
+        k = [("Seu patrimônio nele", brl(r.valor - r.divida)), ("Valor", brl(r.valor)), ("Já pago", brl(r.pago)),
+             ("Ainda deve", brl(r.divida)),
+             ("Quitado", f"{r.pct_quitado:.0%}" if r.pct_quitado is not None and pd.notna(r.pct_quitado) else "—")]
+        cartoes_kpi(k, titulo=r.descricao, icone="🏠", c1="#272B66", c2="#4E57B5")
         if r.pct_quitado is not None and pd.notna(r.pct_quitado):
             st.progress(float(r.pct_quitado), text=f"{r.pct_quitado:.0%} pago"
                         + (f" · {brl(r.a_pagar)} já programado nos lançamentos" if r.a_pagar else ""))

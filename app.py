@@ -6,6 +6,7 @@ import streamlit as st
 
 from core import auth, caixa, db, recorrencias
 from core.fmt import hoje
+from telas import _ui
 from telas._comum import CSS, e_celular
 
 _OLHO_JS = __import__("pathlib").Path(__file__).parent / "static" / "olho.js"
@@ -13,6 +14,8 @@ _OLHO_JS = __import__("pathlib").Path(__file__).parent / "static" / "olho.js"
 st.set_page_config(page_title="Finanças", page_icon="💰", layout="wide",
                    initial_sidebar_state="auto")
 st.markdown(CSS, unsafe_allow_html=True)
+_ui.css()
+st.logo(str(__import__("pathlib").Path(__file__).parent / "static" / "marca.svg"), size="large")
 
 db.migrar()
 usuario = auth.exigir_login()
@@ -85,16 +88,19 @@ paginas = {
 paginas = {grupo: [p for p in lista if p is not None] for grupo, lista in paginas.items()}
 paginas = {grupo: lista for grupo, lista in paginas.items() if lista}
 
-nav = st.navigation(paginas)
+nav = st.navigation(paginas, expanded=True)
 
 # --- olho: esconder/mostrar valores — tudo no navegador (instantâneo), lembra a escolha no aparelho ---
 with st.container(key="olhojs"):
     st.html(f"<script>{_OLHO_JS.read_text(encoding='utf-8')}</script>", unsafe_allow_javascript=True)
 
 with st.sidebar:
-    st.caption(f"Conectado como **{usuario['nome']}**{' · 🛡️ admin' if usuario['admin'] else ''}  \n"
-               f"{usuario['email']}")
-    st.toggle("📱 Layout de celular", value=e_celular(), key="modo_celular")
-    st.button("Sair", icon=":material/logout:", on_click=auth.sair, use_container_width=True)
+    with st.container(key="perfil"):
+        _nome = usuario.get("nome") or usuario["email"]
+        _ui.render(f"""<div class="ui-perfil"><div class="av">{_ui.esc(_nome[:1].upper())}</div>
+            <div style="min-width:0"><div class="n">{_ui.esc(_nome)}{'<span class="adm">admin</span>' if usuario['admin'] else ''}</div>
+            <div class="e">{_ui.esc(usuario['email'])}</div></div></div>""")
+        st.toggle("📱 Layout de celular", value=e_celular(), key="modo_celular")
+        st.button("Sair", icon=":material/logout:", on_click=auth.sair, use_container_width=True)
 
 nav.run()

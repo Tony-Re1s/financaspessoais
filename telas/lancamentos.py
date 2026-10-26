@@ -57,9 +57,10 @@ df["sit"] = df["status"].map({"previsto": "⏳", "pago": "✅"})
 
 desp = df.loc[df["tipo"] == "despesa", "valor"].sum()
 rec = df.loc[df["tipo"] == "receita", "valor"].sum()
-cartoes_kpi([("Despesas", brl(desp)), ("Receitas", brl(rec)),
+periodo = mes_label(ini) if ini == fim else f"{mes_label(ini)} a {mes_label(fim)}"
+cartoes_kpi([("Receitas − despesas", brl(rec - desp)), ("↓ Despesas", brl(desp)), ("↑ Receitas", brl(rec)),
              ("A pagar", brl(df.loc[(df["tipo"] == "despesa") & (df["status"] == "previsto"), "valor"].sum())),
-             ("Lançamentos", str(len(df)))])
+             ("Lançamentos", str(len(df)))], titulo="Lançamentos", icone="📋", direita=periodo)
 
 if cel:   # 3 colunas que cabem na tela: dia, o quê, quanto
     vis = pd.DataFrame({

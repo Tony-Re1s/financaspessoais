@@ -5,6 +5,7 @@ import streamlit as st
 from core import investimentos as inv
 from core import repo
 from core.fmt import brl, hoje
+from telas import _ui
 from telas._comum import cartoes_kpi, col_rs, e_celular, em_reais, usuario
 
 u = usuario()
@@ -27,28 +28,44 @@ else:
     total, aplicado = df["valor_atual"].sum(), df["aplicado"].sum()
     cartoes_kpi([("Total investido hoje", brl(total)), ("Aplicado (aportes − resgates)", brl(aplicado)),
                  ("Ganho", brl(total - aplicado)),
-                 ("Rentabilidade", f"{(total / aplicado - 1) * 100:,.1f}%".replace(".", ",") if aplicado else "—")])
+                 ("Rentabilidade", f"{(total / aplicado - 1) * 100:,.1f}%".replace(".", ",") if aplicado else "—"),
+                 ("Aplicações", str(len(df)))],
+                titulo="Minha carteira", icone="📈", c1="#0B4F45", c2="#12907F")
     v = df.copy()
     v["classe_n"] = v["classe"].map(inv.CLASSES)
     v["atualizado"] = pd.to_datetime(v["data_posicao"])
     v["vencimento"] = pd.to_datetime(v["vencimento"])
-    cols = ["nome", "valor_atual"] if cel else \
+    st.markdown("<div class='ui-sec'>Aplicações</div>", unsafe_allow_html=True)
+    itens = []
+    for r in v.sort_values("valor_atual", ascending=False).itertuples():
+        g = float(r.valor_atual) - float(r.aplicado or 0)
+        pct = f" · {r.ganho_pct:+.1%}".replace(".", ",") if pd.notna(r.ganho_pct) else ""
+        sub = " · ".join(x for x in [r.instituicao, r.classe_n, r.liquidez if isinstance(r.liquidez, str) else ""] if x)
+        itens.append(f"""<div class="ui-item" style="padding:10px 0;border-bottom:1px solid rgba(128,128,128,.1)">
+            {_ui.selo(r.instituicao, r.instituicao, 38)}
+            <div class="ui-tx"><div class="t">{_ui.esc(r.nome)}</div><div class="s">{_ui.esc(sub)}</div></div>
+            <div style="text-align:right"><div class="ui-val" style="color:inherit">{brl(r.valor_atual)}</div>
+            <div class="ui-val {'pos' if g >= 0 else 'neg'}" style="font-size:.76rem">{'+' if g >= 0 else '−'} {brl(abs(g))}{pct}</div></div>
+            </div>""")
+    _ui.render(f"<div class='ui-lista-html'>{''.join(itens)}</div>")
+    with st.expander("Ver em tabela"):
+        cols = ["nome", "valor_atual"] if cel else \
         ["instituicao", "nome", "classe_n", "aplicado", "valor_atual", "ganho_pct", "liquidez", "vencimento",
          "atualizado"]
-    st.dataframe(em_reais(v, "aplicado", "valor_atual")[cols], hide_index=True, use_container_width=True,
-                 column_config={"instituicao": "Onde", "nome": "Aplicação", "classe_n": "Tipo",
-                                "aplicado": col_rs("Aplicado"), "valor_atual": col_rs("Hoje"),
-                                "ganho_pct": st.column_config.NumberColumn("Ganho", format="percent"),
-                                "liquidez": "Liquidez",
-                                "vencimento": st.column_config.DateColumn("Vence", format="DD/MM/YY"),
-                                "atualizado": st.column_config.DateColumn("Posição de", format="DD/MM/YY")})
+        st.dataframe(em_reais(v, "aplicado", "valor_atual")[cols], hide_index=True, use_container_width=True,
+                     column_config={"instituicao": "Onde", "nome": "Aplicação", "classe_n": "Tipo",
+                                    "aplicado": col_rs("Aplicado"), "valor_atual": col_rs("Hoje"),
+                                    "ganho_pct": st.column_config.NumberColumn("Ganho", format="percent"),
+                                    "liquidez": "Liquidez",
+                                    "vencimento": st.column_config.DateColumn("Vence", format="DD/MM/YY"),
+                                    "atualizado": st.column_config.DateColumn("Posição de", format="DD/MM/YY")})
     g1, g2 = st.columns(2) if not cel else (st.container(), st.container())
     por_classe = v.groupby("classe_n", as_index=False)["valor_atual"].sum()
     por_inst = v.groupby("instituicao", as_index=False)["valor_atual"].sum()
     for alvo, dados, campo, titulo in [(g1, por_classe, "classe_n", "Por tipo"), (g2, por_inst, "instituicao", "Por instituição")]:
         with alvo:
             st.caption(titulo)
-            st.altair_chart(alt.Chart(dados).mark_bar().encode(
+            st.altair_chart(alt.Chart(dados).mark_bar(color="#12907F", cornerRadiusEnd=4).encode(
                 y=alt.Y(f"{campo}:N", sort="-x", title=None), x=alt.X("valor_atual:Q", title="R$",
                                                                     axis=alt.Axis(format=",.0f")),
                 tooltip=[alt.Tooltip(f"{campo}:N", title=""), alt.Tooltip("valor_atual:Q", title="R$", format=",.2f")])

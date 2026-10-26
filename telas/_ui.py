@@ -18,6 +18,7 @@ import streamlit as st
 
 from core.fmt import brl, hoje
 
+MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
 LOGOS = Path(__file__).resolve().parent.parent / "static" / "logos"
 
 
@@ -103,7 +104,13 @@ def bandeira(nome, inst=None, alt=20) -> str:
     uri = _logo_uri(f"bandeira-{arq}") if arq else None
     if not uri:
         return ""
-    cls = "ui-band prata" if PREMIUM.search(t) else "ui-band"
+    if PREMIUM.search(t):
+        mask = _logo_uri(f"prata-{arq}")
+        if mask:   # metal: o logo vira máscara sobre um degradê prateado com brilho
+            w = round(alt * (2.3 if arq == "visa" else 1.6))
+            return (f"<span class='ui-band prata'><i class='metal' style='width:{w}px;height:{alt}px;"
+                    f"-webkit-mask-image:url(\"{mask}\");mask-image:url(\"{mask}\")'></i></span>")
+    cls = "ui-band"
     return (f"<span class='{cls}'><img src='{uri}' alt='{esc(arq)}' style='height:{alt}px;width:{int(alt * 1.9)}px;object-fit:contain'></span>")
 
 
@@ -128,9 +135,15 @@ CSS = """
 .ui-band {margin-left: auto; background: #fff; border-radius: 7px; padding: 3px 6px; display: inline-flex;
            align-items: center; box-shadow: 0 1px 4px rgba(0,0,0,.18); flex-shrink: 0;}
 .ui-hero .dir .ui-band {margin-left: 10px;}
-.ui-band.prata {background: linear-gradient(135deg, rgba(255,255,255,.18), rgba(255,255,255,.06));
-                box-shadow: inset 0 0 0 1px rgba(255,255,255,.45);}
-.ui-band.prata img {filter: grayscale(1) brightness(1.9) contrast(.85);}
+.ui-band.prata {background: rgba(0,0,0,.22); box-shadow: inset 0 0 0 1px rgba(255,255,255,.35); padding: 4px 8px;}
+.ui-band .metal {display: block; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+     -webkit-mask-position: center; mask-position: center; -webkit-mask-size: contain; mask-size: contain;
+     background: linear-gradient(110deg, #8d8d8d 0%, #e9e9e9 22%, #ffffff 32%, #b5b5b5 45%, #f4f4f4 60%,
+                 #9a9a9a 78%, #dcdcdc 100%);
+     background-size: 250% 100%; animation: ui-brilho 4.5s ease-in-out infinite;
+     filter: drop-shadow(0 1px 1px rgba(0,0,0,.35));}
+@keyframes ui-brilho {0%, 100% {background-position: 0% 0;} 50% {background-position: 100% 0;}}
+@media (prefers-reduced-motion: reduce) {.ui-band .metal {animation: none;}}
 .ui-selo-txt {color: #fff; font-weight: 800; font-size: .8rem; letter-spacing: .4px;}
 .ui-grade {display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-bottom: 14px;}
 .ui-card {border-radius: 14px; padding: 12px 14px; background: rgba(128,128,128,.06);
@@ -164,6 +177,15 @@ CSS = """
 .ui-val {font-weight: 700; font-size: .95rem; white-space: nowrap; text-align: right;}
 .ui-val.pos {color: #12a150;} .ui-val.neg {color: #d93a40;}
 .ui-prev {opacity: .6;}
+.ui-lista-html {border-radius: 16px; background: rgba(128,128,128,.05); box-shadow: 0 2px 12px rgba(0,0,0,.07);
+     border: 1px solid rgba(128,128,128,.13); padding: 6px 14px;}
+.ui-cat {padding: 10px 0; border-bottom: 1px solid rgba(128,128,128,.10);}
+.ui-cat:last-child {border-bottom: none;}
+.ui-cat .t {display: flex; justify-content: space-between; gap: 10px; font-weight: 600; font-size: .92rem;}
+.ui-cat .t .v {white-space: nowrap;}
+.ui-cat .barra {height: 7px; border-radius: 99px; background: rgba(128,128,128,.14); margin-top: 6px; overflow: hidden;}
+.ui-cat .barra > div {height: 100%; border-radius: 99px; background: linear-gradient(90deg, #0F766E, #2DD4BF);}
+.ui-cat .p {font-size: .72rem; opacity: .6; margin-top: 3px;}
 /* listas com botão de editar por linha: card com sombra, linhas sem quebra no celular */
 [class*="st-key-uilista"] {border-radius: 16px; background: rgba(128,128,128,.05);
      box-shadow: 0 2px 12px rgba(0,0,0,.07); border: 1px solid rgba(128,128,128,.13); padding: 4px 6px; gap: 0 !important;}

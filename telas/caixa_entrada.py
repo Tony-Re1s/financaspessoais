@@ -3,7 +3,8 @@ import streamlit as st
 
 from core import caixa, ia, repo
 from core.fmt import FUSO, brl, hoje, vencimento_fatura
-from telas._comum import opcoes_categoria, usuario
+from telas import _ui
+from telas._comum import cartoes_kpi, opcoes_categoria, usuario
 
 u = usuario()
 st.title("Caixa de entrada")
@@ -13,6 +14,12 @@ if msg := st.session_state.pop("_ok_caixa", None):
     st.success(msg, icon=":material/check_circle:")
 
 pend = caixa.pendentes(u)
+if not pend.empty:
+    _tot = sum(v for v in (caixa.valor_de_texto(x) for x in pend["valor_texto"]) if v)
+    _velha = pd.Timestamp(pend["recebido_em"].min()).tz_convert(FUSO)
+    cartoes_kpi([("Total para conferir", brl(_tot)), ("Compras", str(len(pend))),
+                 ("Mais antiga", f"{_velha:%d/%m %H:%M}")], titulo="Compras chegando",
+                icone="📥", destaque=0, c1="#123B5C", c2="#1F6FA8")
 if pend.empty:
     st.info("Nada pendente. Quando você pagar (Apple Pay ou notificação no Android), a compra aparece aqui.",
             icon=":material/inbox:")
@@ -47,14 +54,17 @@ else:
         valor = caixa.valor_de_texto(item.valor_texto)
         quando = pd.Timestamp(item.recebido_em).tz_convert(FUSO)
         k = str(item.id)
+        _lig = caixa.conta_do_cartao(u, item.cartao)
+        _cl = contas[contas["id"] == _lig]
+        _selo = _ui.selo(_cl.iloc[0]["nome"], _cl.iloc[0]["instituicao"], 40) if not _cl.empty \
+            else _ui.selo(item.cartao or "", None, 40)
         with st.container(border=True):
-            topo, preco = st.columns([3, 1.3], vertical_alignment="center")
-            topo.markdown(f"**{item.estabelecimento or 'Sem estabelecimento'}**  \n"
-                          f"<small>{quando:%d/%m %H:%M} · {item.cartao or 'cartão?'}</small>",
-                          unsafe_allow_html=True)
-            preco.markdown(f"<div style='text-align:right;font-size:1.15rem;font-weight:600'>"
-                           f"{brl(valor) if valor is not None else item.valor_texto}</div>",
-                           unsafe_allow_html=True)
+            _ui.render(f"""<div class="ui-item" style="margin-bottom:4px">
+                {_selo}
+                <div class="ui-tx"><div class="t" style="font-size:1rem">{_ui.esc(item.estabelecimento or 'Sem estabelecimento')}</div>
+                <div class="s">{quando:%d/%m %H:%M} · {_ui.esc(item.cartao or 'cartão?')}</div></div>
+                <div class="ui-val neg" style="font-size:1.12rem">{'− ' + brl(valor) if valor is not None else _ui.esc(item.valor_texto)}</div>
+                </div>""")
             if item.origem == "android" and item.texto_original:
                 st.caption(f"🔔 {item.texto_original}")
 

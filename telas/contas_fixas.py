@@ -26,8 +26,9 @@ df = rec.listar(u)
 ativas = df[df["ativa"]] if not df.empty else df
 desp = ativas[ativas["tipo"] == "despesa"]["valor"].astype(float).sum() if not ativas.empty else 0
 rec_ = ativas[ativas["tipo"] == "receita"]["valor"].astype(float).sum() if not ativas.empty else 0
-cartoes_kpi([("Contas fixas ativas", str(len(ativas))), ("Saem por mês", brl(desp)),
-             ("Entram por mês", brl(rec_)), ("Saldo fixo", brl(rec_ - desp))])
+cartoes_kpi([("Saem por mês", brl(desp)), ("Contas fixas ativas", str(len(ativas))),
+             ("↑ Entram por mês", brl(rec_)), ("Saldo fixo", brl(rec_ - desp)), ("Por ano", brl(desp * 12))],
+            titulo="Compromissos fixos", icone="🔁", c1="#4A2A12", c2="#9A5A1E")
 
 if not df.empty:
     v = df.copy()
