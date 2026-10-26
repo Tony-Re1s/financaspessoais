@@ -6,3 +6,6 @@
 -- O app aplica sozinho na primeira execução (core/db.py: migrar()).
 -- =====================================================================
 alter table contas add column if not exists conta_debito_id uuid references contas(id) on delete set null;
+
+-- 004 — finais do cartão, para reconhecer o cartão ao importar a fatura
+alter table contas add column if not exists finais_cartao text;

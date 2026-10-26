@@ -51,6 +51,9 @@ _MIGRACOES = [
     # 003 — cartão com função débito (ver db/003_cartao_debito.sql)
     ("select 1 from information_schema.columns where table_name = 'contas' and column_name = 'conta_debito_id'",
      "alter table contas add column if not exists conta_debito_id uuid references contas(id) on delete set null"),
+    # 004 — finais do cartão (reconhece o cartão ao importar a fatura)
+    ("select 1 from information_schema.columns where table_name = 'contas' and column_name = 'finais_cartao'",
+     "alter table contas add column if not exists finais_cartao text"),
 ]
 
 

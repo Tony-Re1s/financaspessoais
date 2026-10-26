@@ -6,7 +6,7 @@ from core.importar import importar_planilha_compromissos
 from telas._comum import usuario
 
 u = usuario()
-st.title("Importar")
+st.title("Importar planilha")
 
 st.subheader("Planilha de compromissos")
 st.caption("A `Compromissos_Financeiros.xlsx` (aba **Compromissos**). Cria os cartões, as categorias "
@@ -21,11 +21,7 @@ if arq and st.button("Importar planilha", type="primary", icon=":material/upload
     except Exception as e:  # noqa: BLE001
         st.error(f"Não consegui importar: {e}")
 
-st.divider()
-st.subheader("Faturas de cartão")
-st.info("Próximo módulo: importar faturas do Itaú (.xlsx) e do Nubank (.csv) — só titular, "
-        "parcelas já espalhadas pelos meses e conferência com o que já está lançado.",
-        icon=":material/construction:")
+st.page_link("telas/importar_fatura.py", label="Importar fatura de cartão", icon=":material/credit_card:")
 
 hist = db.consultar("""select criado_em, arquivo, formato, linhas_lidas, linhas_importadas
                          from importacoes where dono_id = :u order by criado_em desc limit 20""", u=u["id"])

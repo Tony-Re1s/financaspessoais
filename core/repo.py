@@ -61,7 +61,7 @@ def contas(u, so_ativas=True) -> pd.DataFrame:
     return db.consultar(f"""
         select id, nome, tipo::text as tipo, instituicao, dia_fechamento, dia_vencimento, limite,
                saldo_inicial, data_saldo_inicial, visibilidade::text as visibilidade, ativa,
-               conta_debito_id
+               conta_debito_id, finais_cartao
           from contas where dono_id = :uid {"and ativa" if so_ativas else ""}
          order by tipo, nome""", uid=u["id"])
 
@@ -176,16 +176,20 @@ def inserir_lancamentos(u, linhas: list[dict]) -> int:
             s.execute(text("""
                 insert into lancamentos (dono_id, conta_id, categoria_id, tipo, descricao, valor, data_compra,
                     data_vencimento, forma_pagamento, status, data_pagamento, parcela_num, parcela_total,
-                    grupo_parcela, visibilidade, observacao, origem)
+                    grupo_parcela, visibilidade, observacao, origem, comprovante_id, recorrencia_id,
+                    chave_importacao)
                 values (:uid, :conta_id, :categoria_id, cast(:tipo as tipo_lancamento), :descricao, :valor,
                     :data_compra, :data_vencimento, :forma_pagamento, cast(:status as status_lancamento),
                     case when :status = 'pago' then :data_vencimento end, :parcela_num, :parcela_total,
                     :grupo_parcela, cast(:visibilidade as visibilidade), :observacao,
-                    cast(coalesce(:origem,'manual') as origem_registro))"""),
+                    cast(coalesce(:origem,'manual') as origem_registro), :comprovante_id, :recorrencia_id,
+                    :chave_importacao)
+                on conflict do nothing"""),
                 {k: p.get(k) for k in ["uid", "conta_id", "categoria_id", "tipo", "descricao", "valor",
                                        "data_compra", "data_vencimento", "forma_pagamento", "status",
                                        "parcela_num", "parcela_total", "grupo_parcela", "visibilidade",
-                                       "observacao", "origem"]})
+                                       "observacao", "origem", "comprovante_id", "recorrencia_id",
+                                       "chave_importacao"]})
     return len(linhas)
 
 
