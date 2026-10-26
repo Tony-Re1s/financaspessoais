@@ -75,16 +75,43 @@ def sugerir_categoria(u, estabelecimento: str):
 
 
 def conta_do_cartao(u, cartao: str):
+    """Conta ligada ao nome do cartão na Carteira (cartão de crédito ou, se for só débito, a conta)."""
     if not cartao:
         return None
     r = db.um("""select id from contas where dono_id = :u and ativa
-                  and lower(apelido_wallet) = lower(:c) limit 1""", u=u["id"], c=cartao.strip())
+                  and lower(apelido_wallet) = lower(:c)
+                  order by (tipo = 'cartao_credito') desc limit 1""", u=u["id"], c=cartao.strip())
     return r["id"] if r else None
 
 
+def ultima_funcao(u, cartao: str) -> str | None:
+    """'credito'/'debito' usado na última compra lançada com este cartão da Carteira."""
+    if not cartao:
+        return None
+    r = db.um("""select l.forma_pagamento from caixa_entrada c
+                   join usuarios us on us.token_atalho = c.token
+                   join lancamentos l on l.id = c.lancamento_id
+                  where us.id = :u and lower(c.cartao) = lower(:c) and c.status = 'lancado'
+                  order by c.tratado_em desc limit 1""", u=u["id"], c=cartao.strip())
+    if not r:
+        return None
+    return "debito" if (r["forma_pagamento"] or "").lower().startswith("debito") else "credito"
+
+
 def lembrar_cartao(u, cartao: str, conta_id):
-    db.executar("update contas set apelido_wallet = :c where id = :k and dono_id = :u",
-                c=cartao.strip(), k=conta_id, u=u["id"])
+    """Grava o nome da Carteira na conta (tirando de outra que tivesse o mesmo nome)."""
+    with db.transacao() as s:
+        s.execute(text("""update contas set apelido_wallet = null
+                           where dono_id = :u and lower(apelido_wallet) = lower(:c) and id <> :k"""),
+                  {"u": u["id"], "c": cartao.strip(), "k": conta_id})
+        s.execute(text("update contas set apelido_wallet = :c where id = :k and dono_id = :u"),
+                  {"c": cartao.strip(), "k": conta_id, "u": u["id"]})
+
+
+def ligar_debito(u, cartao_id, conta_id):
+    """Diz que a função débito do cartão sai desta conta."""
+    db.executar("update contas set conta_debito_id = :d where id = :k and dono_id = :u",
+                d=conta_id, k=cartao_id, u=u["id"])
 
 
 def marcar(u, item_id, status: str, lancamento_id=None):
@@ -101,14 +128,16 @@ def lancar(u, item_id, linhas: list[dict]):
         for p in linhas:
             r = s.execute(text("""
                 insert into lancamentos (dono_id, conta_id, categoria_id, tipo, descricao, valor, data_compra,
-                    data_vencimento, forma_pagamento, status, parcela_num, parcela_total, grupo_parcela,
-                    visibilidade, origem)
+                    data_vencimento, forma_pagamento, status, data_pagamento, parcela_num, parcela_total,
+                    grupo_parcela, visibilidade, origem)
                 values (:uid, :conta_id, :categoria_id, 'despesa', :descricao, :valor, :data_compra,
-                    :data_vencimento, :forma_pagamento, 'previsto', :parcela_num, :parcela_total, :grupo_parcela,
-                    cast(:visibilidade as visibilidade), 'applepay')
+                    :data_vencimento, :forma_pagamento, cast(:status as status_lancamento),
+                    case when :status = 'pago' then :data_vencimento end, :parcela_num, :parcela_total,
+                    :grupo_parcela, cast(:visibilidade as visibilidade), 'applepay')
                 returning id"""), {"uid": u["id"]} | {k: p.get(k) for k in [
                     "conta_id", "categoria_id", "descricao", "valor", "data_compra", "data_vencimento",
-                    "forma_pagamento", "parcela_num", "parcela_total", "grupo_parcela", "visibilidade"]})
+                    "forma_pagamento", "parcela_num", "parcela_total", "grupo_parcela", "visibilidade"]}
+                   | {"status": p.get("status") or "previsto"})
             ids.append(r.scalar())
         s.execute(text("""update caixa_entrada c set status = 'lancado', lancamento_id = :l, tratado_em = now()
                             from usuarios us where c.id = :i and us.token_atalho = c.token and us.id = :u"""),

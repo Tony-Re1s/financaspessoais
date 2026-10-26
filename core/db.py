@@ -44,3 +44,21 @@ def um(sql: str, **params) -> dict | None:
 def executar(sql: str, **params) -> int:
     with transacao() as s:
         return s.execute(text(sql), params).rowcount
+
+
+# (já aplicada?, comando) — a checagem evita pegar lock na tabela à toa a cada reinício
+_MIGRACOES = [
+    # 003 — cartão com função débito (ver db/003_cartao_debito.sql)
+    ("select 1 from information_schema.columns where table_name = 'contas' and column_name = 'conta_debito_id'",
+     "alter table contas add column if not exists conta_debito_id uuid references contas(id) on delete set null"),
+]
+
+
+@st.cache_resource(show_spinner=False)
+def migrar() -> bool:
+    """Aplica as migrações idempotentes uma vez por processo do servidor."""
+    with transacao() as s:
+        for ja, cmd in _MIGRACOES:
+            if s.execute(text(ja)).first() is None:
+                s.execute(text(cmd))
+    return True

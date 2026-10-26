@@ -4,7 +4,7 @@ Rodar local:  streamlit run app.py
 """
 import streamlit as st
 
-from core import auth, caixa
+from core import auth, caixa, db
 from telas._comum import CSS, e_celular
 
 st.set_page_config(page_title="Finanças", page_icon="💰", layout="wide",
@@ -12,6 +12,7 @@ st.set_page_config(page_title="Finanças", page_icon="💰", layout="wide",
 st.markdown(CSS, unsafe_allow_html=True)
 
 usuario = auth.exigir_login()
+db.migrar()
 
 try:
     n_caixa = caixa.qtd_pendentes(usuario)
