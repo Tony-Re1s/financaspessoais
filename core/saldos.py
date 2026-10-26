@@ -74,7 +74,7 @@ def movimentos(u, conta_ids: list, ini: date | None = None, fim: date | None = N
           from lancamentos l left join categorias cat on cat.id = l.categoria_id
          where l.dono_id = :u and l.status <> 'cancelado'
            and (l.conta_id = any(:c)
-                or (l.conta_id is null and cast(:p as uuid) = any(:c)
+                or (l.conta_id is null and cast(:p as uuid) = any(:c) and l.tipo <> 'transferencia'
                     and coalesce(l.forma_pagamento, '') <> 'Cartao de Credito'))
         union all
         select l.id, coalesce(l.data_pagamento, l.data_vencimento), l.descricao, coalesce(cat.nome, '—'),

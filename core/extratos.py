@@ -209,8 +209,9 @@ def classificar(ex: Extrato, nomes_dono: list[str]) -> list[dict]:
         t = _sem_acento(ln.descricao).upper()
         r = {"i": i, "data": ln.data, "descricao": ln.descricao, "valor": ln.valor, "acao": "lancar",
              "tipo": "receita" if ln.valor > 0 else "despesa", "categoria_path": None}
-        if re.match(r"^(FATURA PAGA|PAGAMENTO DE FATURA|PAGTO FATURA|PAG FATURA)", t):
-            r["acao"] = "fatura"
+        if re.match(r"^(FATURA PAGA|PAGAMENTO DE FATURA|PAGTO FATURA|PAG FATURA)", t) or \
+                (ln.valor < 0 and re.search(r"PIX QRS (MERCADO PAG|PICPAY|NU PAGAMENTOS|BANCO INTER)", t)):
+            r["acao"] = "fatura"            # pagamento de fatura (inclui Pix QR para o emissor do cartão)
         elif ("CREDITO LIBERAD" in t and "PIX" in t) or t.startswith("PIX CARTAO") or \
                 (ln.ident and ln.ident in ids_credito):
             r["acao"] = "pix_credito"
@@ -239,7 +240,7 @@ def _limpa_desc(desc: str) -> str:
     d = re.sub(r"^(PIX (QRS|TRANSF|CARTAO)|PAY|PAG BOLETO|DA)\s+", "", d, flags=re.I)
     d = re.sub(r"^(Compra no débito( via NuPay)?|Pagamento de boleto efetuado|Transferência (enviada|recebida) "
                r"pelo Pix)\s*-\s*", "", d, flags=re.I)
-    d = re.split(r"\s+-\s+•", d)[0]
+    d = re.split(r"\s+-\s+(?:•|\d|[A-Z ]+\(\d)", d)[0]
     return d.strip() or desc
 
 
@@ -412,8 +413,9 @@ def gravar(u, conta_id, ex: Extrato, regs: pd.DataFrame, nome_arquivo: str) -> d
                             'importacao', :k, :obs)
                         on conflict do nothing"""),
                         {"u": u["id"], "o": conta_id, "dst": _cartao_da_fatura(s, u, ex.banco, ln.descricao),
-                         "desc": ("Pagamento de fatura " + (re.sub(r"^(FATURA PAGA|Pagamento de fatura)\s*", "",
-                                                                   ln.descricao, flags=re.I).strip() or ex.banco)),
+                         "desc": ("Pagamento de fatura " + (re.sub(r"^(FATURA PAGA|Pagamento de fatura|PIX QRS)\s*|"
+                                                                   r"\d{2}/\d{2}$", "", ln.descricao,
+                                                                   flags=re.I).strip() or ex.banco)),
                          "v": v, "d": ln.data,
                          "k": r.chave, "obs": ln.descricao})
         for d, val in ex.saldos:
@@ -467,7 +469,8 @@ def _cartao_da_fatura(s, u, banco: str, desc: str):
     Só liga com uma palavra que distingue o cartão (nome do banco sozinho não basta: o Itaú tem vários)."""
     cards = s.execute(text("""select id, nome, coalesce(instituicao, '') as inst from contas
                               where dono_id = :u and tipo = 'cartao_credito'"""), {"u": u["id"]}).mappings().all()
-    resto = re.sub(r"^(FATURA PAGA|Pagamento de fatura)\s*", "", desc, flags=re.I).strip()
+    resto = re.sub(r"^(FATURA PAGA|Pagamento de fatura|PIX QRS)\s*", "", desc, flags=re.I).strip()
+    resto = re.sub(r"\d{2}/\d{2}$", "", resto).strip()
     genericas = {"itau", "fatura", "paga", "cartao", "credito", "pagamento", "de", "do", "da"}
     tokens = [t for t in re.findall(r"[a-z]{4,}", _sem_acento(resto).lower()) if t not in genericas]
     if not tokens:                                   # 'Pagamento de fatura' (Nubank): o próprio banco
