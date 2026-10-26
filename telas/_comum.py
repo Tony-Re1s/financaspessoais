@@ -36,6 +36,11 @@ def cartoes_kpi(itens: list[tuple[str, str]]):
 
 CSS = """
 <style>
+/* olho de esconder valores: no canto direito, na altura do título */
+.block-container {position: relative;}
+.st-key-olho {position: absolute !important; top: 2.6rem; right: 1rem; width: auto !important; z-index: 5;}
+.st-key-olho button {border-radius: 99px; min-height: 38px; width: 42px; padding: 0;}
+@media (max-width: 640px) {.st-key-olho {top: 4.6rem; right: .4rem;}}
 .block-container {padding-top: 2.2rem; padding-bottom: 4rem;}
 .kpis {display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .6rem; margin: .2rem 0 1rem;}
 .kpi {border: 1px solid rgba(49,51,63,.15); border-radius: .6rem; padding: .7rem .8rem;}

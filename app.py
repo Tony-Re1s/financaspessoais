@@ -85,6 +85,37 @@ paginas = {grupo: lista for grupo, lista in paginas.items() if lista}
 
 nav = st.navigation(paginas)
 
+# --- olho: esconder/mostrar valores (lembra a escolha do usuário) ---------------------------
+if "ocultar_valores" not in st.session_state:
+    try:
+        _r = db.um("select coalesce((preferencias->>'ocultar_valores')::boolean, false) as o from usuarios where id = :u",
+                   u=usuario["id"])
+        st.session_state["ocultar_valores"] = bool(_r["o"]) if _r else False
+    except Exception:  # noqa: BLE001
+        st.session_state["ocultar_valores"] = False
+
+
+def _alternar_valores():
+    novo = not st.session_state.get("ocultar_valores", False)
+    st.session_state["ocultar_valores"] = novo
+    try:
+        db.executar("""update usuarios set preferencias = coalesce(preferencias, '{}'::jsonb)
+                              || jsonb_build_object('ocultar_valores', cast(:o as boolean)) where id = :u""",
+                    o=novo, u=usuario["id"])
+    except Exception:  # noqa: BLE001
+        pass
+
+
+_oculto = st.session_state["ocultar_valores"]
+with st.container(key="olho"):
+    st.button("", icon=":material/visibility_off:" if _oculto else ":material/visibility:", key="bt_olho",
+              on_click=_alternar_valores, help="Mostrar valores" if _oculto else "Esconder valores")
+if _oculto:   # o que não passa pelo brl(): gráficos e indicadores nativos ficam borrados
+    st.markdown("""<style>
+      [data-testid="stVegaLiteChart"], [data-testid="stArrowVegaLiteChart"], [data-testid="stPlotlyChart"],
+      [data-testid="stMetricValue"], [data-testid="stMetricDelta"] {filter: blur(9px); pointer-events: none;}
+    </style>""", unsafe_allow_html=True)
+
 with st.sidebar:
     st.caption(f"Conectado como **{usuario['nome']}**{' · 🛡️ admin' if usuario['admin'] else ''}  \n"
                f"{usuario['email']}")
