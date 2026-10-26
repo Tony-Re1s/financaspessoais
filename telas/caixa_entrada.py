@@ -73,17 +73,6 @@ else:
                                            format="%.2f", key=f"val_{k}")
                 parcelas = a2.number_input("Parcelas", 1, 48, 1, key=f"parc_{k}", disabled=debito,
                                            help="Débito é sempre à vista" if debito else None)
-                if not item.cartao:
-                    lembrar, rot = False, ""
-                elif debito and cartao_sug is not None:
-                    rot = f"Lembrar que o débito de “{item.cartao}” sai desta conta"
-                elif debito:
-                    rot = f"Lembrar que “{item.cartao}” é só débito desta conta"
-                else:
-                    rot = f"Lembrar que “{item.cartao}” é este cartão"
-                novo = (banco_sug if debito else cartao_sug) is None
-                lembrar = st.checkbox(rot or "Lembrar cartão", value=novo, key=f"lemb_{k}_{funcao}",
-                                      disabled=not item.cartao)
 
             b1, b2 = st.columns([2, 1])
             pode = bool(categoria_id) and bool(conta_id) and valor_ed > 0
@@ -104,7 +93,7 @@ else:
                              status=status, visibilidade=None)
                 linhas = repo.plano_parcelas(dados, 1, n_parc, valor_e_total=True)
                 caixa.lancar(u, item.id, linhas)
-                if lembrar and item.cartao:
+                if item.cartao:   # sempre aprende: próxima compra deste cartão já vem preenchida
                     if debito and cartao_sug is not None:
                         caixa.ligar_debito(u, cartao_sug, conta_id)
                     else:
