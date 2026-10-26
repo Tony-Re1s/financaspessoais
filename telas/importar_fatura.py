@@ -3,10 +3,11 @@ import streamlit as st
 
 from core import faturas, repo
 from core.fmt import brl
+from telas import _ui
 from telas._comum import cartoes_kpi, col_rs, e_celular, em_reais, opcoes_categoria, usuario
 
 u = usuario()
-st.title("Importar fatura")
+_ui.titulo("Importar fatura", "💳")
 st.caption("Suba a fatura do cartão. O app mostra o que é novo, o que já estava lançado (planilha, Apple Pay, "
            "manual) e cria as parcelas futuras — sem duplicar. Pode importar a mesma fatura de novo quando ela "
            "atualizar.")

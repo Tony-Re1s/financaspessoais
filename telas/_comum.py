@@ -62,6 +62,34 @@ html.fin-oculto [data-testid="stPlotlyChart"], html.fin-oculto [data-testid="stM
 html.fin-oculto [data-testid="stMetricDelta"] {filter: blur(9px); pointer-events: none;}
 .block-container {padding-top: 2.2rem; padding-bottom: 4rem;}
 
+/* ---------- fundo da área central ---------- */
+[data-testid="stAppViewContainer"], .stApp {
+    background: radial-gradient(1100px 420px at 88% -8%, rgba(45,212,191,.20), transparent 62%),
+                radial-gradient(900px 400px at 8% -6%, rgba(99,102,241,.14), transparent 60%),
+                linear-gradient(180deg, #F1F5FA 0%, #EDF1F7 100%) !important;
+    background-attachment: fixed !important;}
+[data-testid="stHeader"] {background: transparent !important;}
+.ui-card, .ui-lista-html, [class*="st-key-uilista"] {background: #fff !important;}
+[data-baseweb="input"], [data-baseweb="select"] > div, [data-baseweb="textarea"] {background: #fff !important;}
+[data-baseweb="input"] input, [data-baseweb="textarea"] textarea {background: transparent !important;}
+
+/* ---------- pílulas de seleção (segmented control / pills) ---------- */
+[data-testid="stButtonGroup"] [role="radiogroup"], [data-testid="stButtonGroup"] > div:not([data-testid]) {
+    gap: 8px !important; flex-wrap: wrap;}
+[data-testid="stButtonGroup"] button[data-variant] {
+    border-radius: 99px !important; margin: 0 !important; padding: 6px 16px !important;
+    border: 1px solid rgba(15,118,110,.22) !important; background: #fff !important;
+    box-shadow: 0 1px 4px rgba(17,24,39,.06); color: #134E4A !important; transition: all .15s;}
+[data-testid="stButtonGroup"] button[data-variant]:hover {border-color: #0F766E !important; background: #F0FDFA !important;}
+[data-testid="stButtonGroup"] button[data-variant][aria-checked="true"],
+[data-testid="stButtonGroup"] button[data-variant][data-selected="true"] {
+    background: linear-gradient(135deg, #0F766E, #14A391) !important; border-color: transparent !important;
+    color: #fff !important; box-shadow: 0 6px 16px rgba(15,118,110,.32) !important;}
+[data-testid="stButtonGroup"] button[data-variant][aria-checked="true"] p,
+[data-testid="stButtonGroup"] button[data-variant][data-selected="true"] p {color: #fff !important; font-weight: 700;}
+[data-testid="stButtonGroup"] button[data-variant][aria-checked="true"] p::before,
+[data-testid="stButtonGroup"] button[data-variant][data-selected="true"] p::before {content: "✓ "; font-weight: 800;}
+
 /* ---------- tipografia ---------- */
 h1 {font-weight: 800 !important; letter-spacing: -.6px;}
 h2, h3 {font-weight: 800 !important; letter-spacing: -.3px;}
@@ -69,12 +97,13 @@ h2, h3 {font-weight: 800 !important; letter-spacing: -.3px;}
 
 /* ---------- cards: containers com borda, formulários, expanders, tabelas ---------- */
 [data-testid="stVerticalBlockBorderWrapper"], [data-testid="stForm"] {
-    border-radius: 18px !important; border: 1px solid rgba(128,128,128,.14) !important;
-    box-shadow: 0 2px 14px rgba(17,24,39,.07); background: rgba(128,128,128,.025);}
-[data-testid="stExpander"] details {border-radius: 16px !important; border: 1px solid rgba(128,128,128,.14) !important;
+    border-radius: 18px !important; border: 1px solid rgba(15,23,42,.07) !important;
+    box-shadow: 0 4px 18px rgba(17,24,39,.07); background: #fff;}
+[data-testid="stExpander"] details {border-radius: 16px !important; border: 1px solid rgba(15,23,42,.07) !important;
+    background: #fff;
     box-shadow: 0 2px 12px rgba(17,24,39,.06);}
 [data-testid="stExpander"] summary {font-weight: 600;}
-[data-testid="stDataFrame"], [data-testid="stTable"] {border-radius: 14px; overflow: hidden;
+[data-testid="stDataFrame"], [data-testid="stTable"] {border-radius: 14px; overflow: hidden; background: #fff;
     box-shadow: 0 2px 12px rgba(17,24,39,.07); border: 1px solid rgba(128,128,128,.14);}
 [data-testid="stAlert"] {border-radius: 14px;}
 

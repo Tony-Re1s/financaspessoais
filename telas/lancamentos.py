@@ -3,11 +3,13 @@ import streamlit as st
 
 from core import repo
 from core.fmt import brl, hoje, mes_label, mes_ref, somar_meses
+from telas import _ui
 from telas._comum import cartoes_kpi, col_rs, e_celular, em_reais, seletor_escopo, usuario
 
 u = usuario()
 topo_esq, topo_dir = st.columns([3, 1], vertical_alignment="bottom")
-topo_esq.title("Lançamentos")
+with topo_esq:
+    _ui.titulo("Lançamentos", "📋")
 with topo_dir:
     escopo = seletor_escopo()
 

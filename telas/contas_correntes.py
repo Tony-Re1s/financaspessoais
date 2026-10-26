@@ -17,7 +17,7 @@ _ui.aviso_ok()
 contas = repo.contas(u)
 caixa = contas[contas["tipo"].isin(saldos.TIPOS_CAIXA)]
 if caixa.empty:
-    st.title("Contas correntes")
+    _ui.titulo("Contas correntes", "🏦")
     st.info("Cadastre suas contas correntes em **Contas e cartões** (tipo *Conta corrente*).")
     st.stop()
 
@@ -111,7 +111,7 @@ def ver_fatura(desc: str, valor: float):
 # ---------------------------------------------------------------------------------------------
 nomes = dict(zip(caixa["id"].astype(str), caixa["nome"]))
 inst = dict(zip(caixa["id"].astype(str), caixa["instituicao"]))
-st.title("Contas correntes")
+_ui.titulo("Contas correntes", "🏦")
 escolha = st.segmented_control("Conta", ["todas"] + list(nomes), default=st.session_state.get("_cc_conta", "todas"),
                                key="cc_conta", format_func=lambda k: "Todas" if k == "todas" else nomes[k],
                                label_visibility="collapsed") or "todas"

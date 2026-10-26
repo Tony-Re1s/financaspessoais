@@ -3,10 +3,11 @@ import streamlit as st
 from core import db
 from core.fmt import brl
 from core.importar import importar_planilha_compromissos
+from telas import _ui
 from telas._comum import usuario
 
 u = usuario()
-st.title("Importar planilha")
+_ui.titulo("Importar planilha", "📄")
 
 st.subheader("Planilha de compromissos")
 st.caption("A `Compromissos_Financeiros.xlsx` (aba **Compromissos**). Cria os cartões, as categorias "

@@ -4,11 +4,12 @@ import streamlit as st
 
 from core import db, patrimonio, repo, saldos
 from core.fmt import brl, hoje, mes_label
+from telas import _ui
 from telas._comum import cartoes_kpi, col_rs, e_celular, em_reais, usuario
 
 u = usuario()
 cel = e_celular()
-st.title("Patrimônio")
+_ui.titulo("Patrimônio", "🏛️")
 
 if msg := st.session_state.pop("_ok_pat", None):
     st.success(msg, icon=":material/check_circle:")

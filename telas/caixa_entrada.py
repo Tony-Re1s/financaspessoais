@@ -7,7 +7,7 @@ from telas import _ui
 from telas._comum import cartoes_kpi, opcoes_categoria, usuario
 
 u = usuario()
-st.title("Caixa de entrada")
+_ui.titulo("Caixa de entrada", "📥")
 st.caption("Compras que chegaram sozinhas (Apple Pay no iPhone, notificações no Android). Confira crédito ou débito, a categoria e o cartão e toque em **Lançar**.")
 
 if msg := st.session_state.pop("_ok_caixa", None):

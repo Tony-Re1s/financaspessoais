@@ -177,6 +177,24 @@ CSS = """
 .ui-val {font-weight: 700; font-size: .95rem; white-space: nowrap; text-align: right;}
 .ui-val.pos {color: #12a150;} .ui-val.neg {color: #d93a40;}
 .ui-prev {opacity: .6;}
+/* cabeçalho das telas */
+.ui-cab {margin: 0 0 14px;}
+.ui-cab .ola {display: flex; align-items: center; gap: 10px; font-size: .92rem; color: #334155;}
+.ui-cab .ola b {display: block; font-weight: 700; line-height: 1.15;}
+.ui-cab .ola span {display: block; font-size: .76rem; opacity: .7;}
+.ui-cab .ola span::first-letter {text-transform: uppercase;}
+.ui-cab .tt {display: flex; align-items: center; gap: 12px; margin-top: 12px; font-size: 2.15rem; font-weight: 800;
+             letter-spacing: -.8px; line-height: 1.1; color: #0F172A;}
+.ui-cab .tt .ic {width: 46px; height: 46px; border-radius: 14px; display: flex; align-items: center;
+     justify-content: center; font-size: 1.45rem; background: linear-gradient(135deg, #0F766E, #2DD4BF);
+     box-shadow: 0 8px 18px rgba(15,118,110,.28); flex-shrink: 0;}
+.ui-cab .sub {margin-top: 6px; font-size: .9rem; color: #475569; max-width: 760px;}
+.ui-av {border-radius: 50%; object-fit: cover; flex-shrink: 0; box-shadow: 0 0 0 2px #fff, 0 3px 10px rgba(0,0,0,.15);}
+.ui-av-txt {display: flex; align-items: center; justify-content: center; font-weight: 800; color: #fff;
+            background: linear-gradient(135deg, #0F766E, #14A391);}
+@media (max-width: 640px) {
+  .ui-cab .tt {font-size: 1.65rem; gap: 10px;} .ui-cab .tt .ic {width: 38px; height: 38px; font-size: 1.15rem;}
+}
 .ui-lista-html {border-radius: 16px; background: rgba(128,128,128,.05); box-shadow: 0 2px 12px rgba(0,0,0,.07);
      border: 1px solid rgba(128,128,128,.13); padding: 6px 14px;}
 .ui-cat {padding: 10px 0; border-bottom: 1px solid rgba(128,128,128,.10);}
@@ -212,6 +230,38 @@ CSS = """
 
 def css():
     st.markdown(CSS, unsafe_allow_html=True)
+
+
+DIAS_SEMANA = ["segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo"]
+MESES_LONGOS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro",
+                "outubro", "novembro", "dezembro"]
+
+
+def avatar(u: dict, tam=42) -> str:
+    """Foto do Google de quem está logado (ou a inicial, se não houver)."""
+    foto = u.get("foto")
+    nome = u.get("nome") or u.get("email") or "?"
+    if isinstance(foto, str) and foto.startswith("https://"):
+        return (f"<img class='ui-av' src='{esc(foto)}' alt='' referrerpolicy='no-referrer' "
+                f"style='width:{tam}px;height:{tam}px'>")
+    return (f"<div class='ui-av ui-av-txt' style='width:{tam}px;height:{tam}px'>{esc(nome[:1].upper())}</div>")
+
+
+def titulo(texto: str, icone: str = "", sub: str = ""):
+    """Cabeçalho das telas: saudação com a foto de quem está logado + título da página."""
+    from datetime import datetime
+
+    from core.fmt import FUSO
+    u = st.session_state.get("usuario") or {}
+    agora = datetime.now(FUSO)
+    ola = "Bom dia" if 5 <= agora.hour < 12 else ("Boa tarde" if 12 <= agora.hour < 18 else "Boa noite")
+    primeiro = (u.get("nome") or "").split(" ")[0]
+    data = f"{DIAS_SEMANA[agora.weekday()]}, {agora.day} de {MESES_LONGOS[agora.month - 1]}"
+    render(f"""<div class="ui-cab">
+        <div class="ola">{avatar(u, 34)}<div><b>{ola}{', ' + esc(primeiro) if primeiro else ''}!</b>
+          <span>{data}</span></div></div>
+        <div class="tt">{f'<span class="ic">{icone}</span>' if icone else ''}<span>{esc(texto)}</span></div>
+        {f'<div class="sub">{sub}</div>' if sub else ''}</div>""")
 
 
 def hero(titulo, rotulo, valor, minis: list[tuple[str, str]], c1="#1F2A44", c2="#3B4C75", selo_html="",

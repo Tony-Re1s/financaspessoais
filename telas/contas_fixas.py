@@ -7,10 +7,11 @@ from core import recorrencias as rec
 from core import repo
 from core.fmt import brl, hoje
 from core.padroes import VISIBILIDADES
+from telas import _ui
 from telas._comum import cartoes_kpi, col_rs, e_celular, em_reais, opcoes_categoria, usuario
 
 u = usuario()
-st.title("Contas fixas")
+_ui.titulo("Contas fixas", "🔁")
 st.caption("Aluguel, condomínio, escola, assinaturas… Cadastre uma vez: o app lança os próximos 12 meses como "
            "*previstos* e vai completando sozinho. Se o lançamento já existir (planilha, fatura), ele só liga.")
 

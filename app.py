@@ -15,7 +15,8 @@ st.set_page_config(page_title="Finanças", page_icon="💰", layout="wide",
                    initial_sidebar_state="auto")
 st.markdown(CSS, unsafe_allow_html=True)
 _ui.css()
-st.logo(str(__import__("pathlib").Path(__file__).parent / "static" / "marca.svg"), size="large")
+_ST = __import__("pathlib").Path(__file__).parent / "static"
+st.logo(str(_ST / "marca.svg"), size="large", icon_image=str(_ST / "marca-icone.svg"))
 
 db.migrar()
 usuario = auth.exigir_login()
@@ -26,7 +27,12 @@ if not ativo:
     st.button("Sair", on_click=auth.sair)
     st.stop()
 usuario["permissoes"] = perm
-usuario.setdefault("admin", auth.acesso.e_admin(usuario["email"]))   # sessões abertas antes desta versão
+usuario.setdefault("admin", auth.acesso.e_admin(usuario["email"]))
+if "foto" not in usuario:   # foto do Google (sessões abertas antes desta versão também)
+    try:
+        usuario["foto"] = st.user.get("picture")
+    except Exception:  # noqa: BLE001
+        usuario["foto"] = None   # sessões abertas antes desta versão
 
 @st.cache_data(ttl=6 * 3600, show_spinner=False)
 def _completar_fixas(uid, dia):
@@ -97,7 +103,7 @@ with st.container(key="olhojs"):
 with st.sidebar:
     with st.container(key="perfil"):
         _nome = usuario.get("nome") or usuario["email"]
-        _ui.render(f"""<div class="ui-perfil"><div class="av">{_ui.esc(_nome[:1].upper())}</div>
+        _ui.render(f"""<div class="ui-perfil">{_ui.avatar(usuario, 38)}
             <div style="min-width:0"><div class="n">{_ui.esc(_nome)}{'<span class="adm">admin</span>' if usuario['admin'] else ''}</div>
             <div class="e">{_ui.esc(usuario['email'])}</div></div></div>""")
         st.toggle("📱 Layout de celular", value=e_celular(), key="modo_celular")

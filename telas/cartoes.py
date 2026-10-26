@@ -20,7 +20,7 @@ st.markdown("""<style>
 .ui-grade-cc {display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; margin: 4px 0 18px;}
 </style>""", unsafe_allow_html=True)
 
-st.title("Cartões de crédito")
+_ui.titulo("Cartões de crédito", "💳")
 
 fat = cartoes.faturas(u)
 if fat.empty:

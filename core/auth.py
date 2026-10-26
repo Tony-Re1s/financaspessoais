@@ -77,6 +77,10 @@ def exigir_login() -> dict:
     with db.transacao() as s:
         usuario = garantir_usuario(s, email, nome)
     usuario["admin"] = acesso.e_admin(email)
+    try:
+        usuario["foto"] = None if dev_email else st.user.get("picture")
+    except Exception:  # noqa: BLE001
+        usuario["foto"] = None
     acesso.registrar_acesso(email)
     st.session_state["usuario"] = usuario
     return usuario

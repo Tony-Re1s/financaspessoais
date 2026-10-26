@@ -3,10 +3,11 @@ from urllib.parse import urlparse
 import streamlit as st
 
 from core import caixa
+from telas import _ui
 from telas._comum import usuario
 
 u = usuario()
-st.title("Celular → Caixa de entrada")
+_ui.titulo("Celular → Caixa de entrada", "📱")
 st.caption("Toda compra cai sozinha na **Caixa de entrada** do app. Configura uma vez e esquece.")
 
 try:

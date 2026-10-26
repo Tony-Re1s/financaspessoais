@@ -13,7 +13,8 @@ u = usuario()
 cel = e_celular()
 _ui.aviso_ok()
 topo_esq, topo_dir = st.columns([3, 1], vertical_alignment="bottom")
-topo_esq.title("Painel")
+with topo_esq:
+    _ui.titulo("Painel", "🏠")
 with topo_dir:
     escopo = seletor_escopo()
 
@@ -52,7 +53,7 @@ cartoes_kpi([
     (f"Já pago em {mes_label(atual)}", brl(soma(mes_atual, status="pago"))),
     (f"Comprometido em {mes_label(prox)}", brl(soma(desp, mes_ref=prox))),
     ("Próximos 12 meses", brl(float(desp["valor"].sum()) if not desp.empty else 0)),
-], titulo=f"Olá, {u.get('nome') or ''}".strip(", "), icone="👋", direita=mes_label(atual))
+], titulo="Visão geral", icone="🏠", direita=mes_label(atual))
 
 # --- minhas contas e cartões -------------------------------------------------------------------
 cards = []

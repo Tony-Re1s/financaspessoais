@@ -3,10 +3,11 @@ import streamlit as st
 
 from core import repo
 from core.padroes import TIPOS_CONTA, VISIBILIDADES
+from telas import _ui
 from telas._comum import col_rs, e_celular, em_reais, usuario
 
 u = usuario()
-st.title("Contas e cartões")
+_ui.titulo("Contas e cartões", "🏦")
 if msg := st.session_state.pop("_ok_conta", None):
     st.success(msg)
 

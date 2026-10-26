@@ -4,10 +4,11 @@ import pandas as pd
 import streamlit as st
 
 from core import acesso
+from telas import _ui
 from telas._comum import usuario
 
 u = usuario()
-st.title("Usuários e permissões")
+_ui.titulo("Usuários e permissões", "🛡️")
 if not u.get("admin"):
     st.error("Só o administrador acessa esta tela.")
     st.stop()

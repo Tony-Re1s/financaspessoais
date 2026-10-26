@@ -5,11 +5,12 @@ import streamlit as st
 
 from core import extratos, ia, repo
 from core.fmt import brl
+from telas import _ui
 from telas._comum import cartoes_kpi, col_rs, e_celular, em_reais, opcoes_categoria, usuario
 
 u = usuario()
 cel = e_celular()
-st.title("Importar extrato de conta")
+_ui.titulo("Importar extrato de conta", "🧾")
 st.caption("Suba o extrato da conta corrente. O app separa o que é gasto, o que é pagamento de fatura (não conta "
            "de novo), Pix no crédito e transferência entre suas contas, e liga com o que já estava lançado.")
 

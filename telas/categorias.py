@@ -3,10 +3,11 @@ import streamlit as st
 
 from core import repo
 from core.padroes import NATUREZAS_IR, VISIBILIDADES
+from telas import _ui
 from telas._comum import usuario
 
 u = usuario()
-st.title("Categorias")
+_ui.titulo("Categorias", "🏷️")
 if msg := st.session_state.pop("_ok_cat", None):
     st.success(msg)
 

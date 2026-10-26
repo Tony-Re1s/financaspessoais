@@ -4,10 +4,11 @@ import streamlit as st
 from core import repo
 from core.fmt import brl, hoje, vencimento_fatura
 from core.padroes import FORMAS_PAGAMENTO, TIPOS_CONTA, VISIBILIDADES
+from telas import _ui
 from telas._comum import col_rs, em_reais, opcoes_categoria, usuario
 
 u = usuario()
-st.title("Novo lançamento")
+_ui.titulo("Novo lançamento", "➕")
 
 if msg := st.session_state.pop("_ok_lanc", None):
     st.success(msg, icon=":material/check_circle:")

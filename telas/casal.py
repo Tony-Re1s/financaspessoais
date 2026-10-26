@@ -2,10 +2,11 @@ import streamlit as st
 
 from core import repo
 from core.padroes import VISIBILIDADES
+from telas import _ui
 from telas._comum import col_rs, em_reais, usuario
 
 u = usuario()
-st.title("Casal e privacidade")
+_ui.titulo("Casal e privacidade", "💑")
 
 g = repo.grupo(u)
 with st.form("grupo"):

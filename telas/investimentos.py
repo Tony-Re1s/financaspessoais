@@ -10,7 +10,7 @@ from telas._comum import cartoes_kpi, col_rs, e_celular, em_reais, usuario
 
 u = usuario()
 cel = e_celular()
-st.title("Investimentos")
+_ui.titulo("Investimentos", "📈")
 
 if msg := st.session_state.pop("_ok_inv", None):
     st.success(msg, icon=":material/check_circle:")

@@ -5,10 +5,11 @@ import streamlit as st
 
 from core import db, ia, repo
 from core.fmt import brl, hoje, vencimento_fatura
+from telas import _ui
 from telas._comum import opcoes_categoria, usuario
 
 u = usuario()
-st.title("Lançamento rápido")
+_ui.titulo("Lançamento rápido", "⚡")
 st.caption("Tire foto do comprovante ou escreva do seu jeito (“mercado 45 nubank débito”). "
            "A IA preenche e você só confere.")
 
