@@ -129,3 +129,39 @@ def interpretar(contas: dict, categorias: dict, hoje: date, texto: str | None = 
     d["parcelas"] = max(1, int(d.get("parcelas") or 1))
     d["_bruto"] = json.dumps(bloco["input"], ensure_ascii=False)
     return d
+
+
+def categorizar(itens: list[tuple[str, float]], categorias: dict) -> list:
+    """[(descrição, valor)] -> [categoria_id ou None], numa chamada só. valor < 0 = saída."""
+    k = chave()
+    if not k or not itens:
+        return [None] * len(itens)
+    lk = list(categorias.items())
+    lista_cat = "\n".join(f"{i}. {n}" for i, (_, n) in enumerate(lk))
+    lista_it = "\n".join(f"{i}. {d} | {'saída' if v < 0 else 'entrada'} R$ {abs(v):.2f}"
+                         for i, (d, v) in enumerate(itens))
+    ferramenta = {"name": "classificar", "description": "Categoria de cada item do extrato bancário.",
+                  "input_schema": {"type": "object", "properties": {"itens": {"type": "array", "items": {
+                      "type": "object", "properties": {"i": {"type": "integer"},
+                                                       "categoria": {"type": ["integer", "null"]}},
+                      "required": ["i", "categoria"]}}}, "required": ["itens"]}}
+    r = httpx.post(URL, timeout=90, headers={"x-api-key": k, "anthropic-version": "2023-06-01",
+                                             "content-type": "application/json"},
+                   json={"model": modelo(), "max_tokens": 4000,
+                         "system": "Você classifica lançamentos de extrato bancário brasileiro em categorias de "
+                                   "finanças pessoais. Use null quando não der para saber (ex.: pix para pessoa "
+                                   "física sem pista). Chame a ferramenta classificar.",
+                         "tools": [ferramenta], "tool_choice": {"type": "tool", "name": "classificar"},
+                         "messages": [{"role": "user", "content": f"Categorias:\n{lista_cat}\n\nItens:\n{lista_it}"}]})
+    if r.status_code >= 400:
+        raise RuntimeError(f"A IA respondeu erro {r.status_code}")
+    bloco = next(b for b in r.json()["content"] if b.get("type") == "tool_use")
+    out = [None] * len(itens)
+    for x in bloco["input"].get("itens", []):
+        try:
+            i, c = int(x["i"]), x.get("categoria")
+            if 0 <= i < len(itens) and c is not None and 0 <= int(c) < len(lk):
+                out[i] = lk[int(c)][0]
+        except (TypeError, ValueError, KeyError):
+            pass
+    return out

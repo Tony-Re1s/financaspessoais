@@ -68,6 +68,7 @@ paginas = {
         _p("patrimonio", "telas/patrimonio.py", title="Patrimônio", icon=":material/savings:"),
     ],
     "Importar": [
+        _p("importar", "telas/importar_extrato.py", title="Extrato de conta", icon=":material/account_balance:"),
         _p("importar", "telas/importar_fatura.py", title="Fatura de cartão", icon=":material/receipt:"),
         _p("importar", "telas/importar.py", title="Planilha", icon=":material/upload_file:"),
     ],
