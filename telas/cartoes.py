@@ -30,6 +30,8 @@ if res["n_atrasadas"].sum():
 
 # --- visão geral ------------------------------------------------------------------------------
 v = res.copy()
+v["venc_atual"] = pd.to_datetime(v["venc_atual"])
+v["venc_prox"] = pd.to_datetime(v["venc_prox"])
 v["uso"] = v.apply(lambda r: r.comprometido / r.limite if r.limite else None, axis=1)
 cols = ["cartao", "fatura_atual", "venc_atual"] if cel else \
     ["cartao", "venc_atual", "fatura_atual", "venc_prox", "fatura_prox", "comprometido", "limite", "uso"]

@@ -30,7 +30,8 @@ else:
                  ("Rentabilidade", f"{(total / aplicado - 1) * 100:,.1f}%".replace(".", ",") if aplicado else "—")])
     v = df.copy()
     v["classe_n"] = v["classe"].map(inv.CLASSES)
-    v["atualizado"] = v["data_posicao"]
+    v["atualizado"] = pd.to_datetime(v["data_posicao"])
+    v["vencimento"] = pd.to_datetime(v["vencimento"])
     cols = ["nome", "valor_atual"] if cel else \
         ["instituicao", "nome", "classe_n", "aplicado", "valor_atual", "ganho_pct", "liquidez", "vencimento",
          "atualizado"]
