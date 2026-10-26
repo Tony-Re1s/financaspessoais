@@ -111,7 +111,8 @@ for r in ordem.itertuples():
     tiles.append(f"""<div class="ui-cc{' sel' if r.cartao_id == sel else ''}"
         style="background:linear-gradient(135deg,{b['c1']} 0%,{b['c2']} 100%);--anel:{b['c1']}">
         <div class="cab">{_ui.selo(c['nome'], c['instituicao'], 40)}
-          <div><div class="nome">{_ui.esc(c['nome'])}</div><div class="bco">{_ui.esc(c['instituicao'] or '')}</div></div></div>
+          <div><div class="nome">{_ui.esc(c['nome'])}</div><div class="bco">{_ui.esc(c['instituicao'] or '')}</div></div>
+          {_ui.bandeira(c['nome'], c['instituicao'], 18)}</div>
         <div><div class="l">Fatura · {venc}</div><div class="v">{brl(val)}</div></div>
         {barra}
         <div class="pe"><span>Próxima {brl(r.fatura_prox) if r.fatura_prox else '—'}</span>
@@ -156,7 +157,7 @@ _ui.hero(c["nome"], f"Fatura de {mes_label(mes)}", brl(linha["total"]),
          [("Vence", f"{venc_d:%d/%m/%Y}"), ("Fecha" + ("" if fech else " (estimado)"), f"{fech_d:%d/%m}"),
           ("Lançamentos", str(len(it))), ("Situação", "✅ Paga" if linha["paga"] else "Em aberto")],
          c1=b["c1"], c2=b["c2"], selo_html=_ui.selo(c["nome"], c["instituicao"], 40), sub=sub,
-         direita="")
+         direita="", direita_html=_ui.bandeira(c["nome"], c["instituicao"], 22))
 
 a1, a2, a3, a4 = st.columns([1.4, 1, 1, 1.6], vertical_alignment="center")
 if not linha["paga"]:

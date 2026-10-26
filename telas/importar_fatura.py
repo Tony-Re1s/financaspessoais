@@ -18,7 +18,7 @@ with st.expander("Bancos que o app já lê"):
     st.markdown("\n".join(f"- {nome}" for nome, *_ in faturas.LEITORES))
     st.caption("Banco diferente? Mande um arquivo de exemplo que o leitor dele é acrescentado.")
 
-arq = st.file_uploader("Arquivo da fatura", type=["xlsx", "csv"], key="up_fatura")
+arq = st.file_uploader("Arquivo da fatura", type=["xlsx", "csv", "ofx"], key="up_fatura")
 if not arq:
     st.stop()
 
@@ -148,9 +148,12 @@ if futuras:
                                     "descricao": "Descrição", "parcela": "Parc.", "valor": col_rs()})
 
 if st.button("Importar", type="primary", icon=":material/download_done:", use_container_width=True,
-             disabled=escolhidas.empty and not futuras):
-    r = faturas.gravar(u, conta_id, fat, vencimento, escolhidas, futuras, arq.name)
+             disabled=escolhidas.empty and not futuras and ja.empty):
+    r = faturas.gravar(u, conta_id, fat, vencimento, escolhidas, futuras, arq.name,
+                       vincular=regs[regs["situacao"] == "ja_lancada"])
     st.session_state["_ok_fat"] = (f"Fatura importada: {r['novas']} lançamentos"
-                                   + (f" e {r['futuras']} parcelas futuras" if r["futuras"] else "") + ".")
+                                   + (f" e {r['futuras']} parcelas futuras" if r["futuras"] else "")
+                                   + (f"; {r['vinculadas']} já existentes conferidos" if r["vinculadas"] else "")
+                                   + ".")
     st.session_state.pop("up_fatura", None)
     st.rerun()

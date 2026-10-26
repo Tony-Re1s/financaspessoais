@@ -160,6 +160,44 @@ def _ler_nubank_csv(nome: str, dados: bytes) -> Fatura:
     return fat
 
 
+def _ofx_tags(bloco: str) -> dict:
+    return {m.group(1).upper(): m.group(2).strip() for m in re.finditer(r"<(\w+)>([^<\r\n]*)", bloco)}
+
+
+def _ofx_data(v: str | None) -> date | None:
+    return date(int(v[:4]), int(v[4:6]), int(v[6:8])) if v and len(v) >= 8 and v[:8].isdigit() else None
+
+
+def _ler_ofx(nome: str, dados: bytes) -> Fatura:
+    """OFX de cartão (Nubank e outros): STMTTRN com DTPOSTED / TRNAMT / MEMO. DEBIT negativo = compra."""
+    texto = dados.decode("cp1252", errors="replace")
+    org = (re.search(r"<ORG>([^<\r\n]+)", texto) or [None, ""])[1].strip()
+    banco = "Nubank" if re.search(r"\bnu\b|nubank", org, re.I) else (org.title() or "Cartão")
+    linhas = []
+    for bloco in re.findall(r"<STMTTRN>(.*?)</STMTTRN>", texto, re.S | re.I):
+        t = _ofx_tags(bloco)
+        valor, d = _num_br(t.get("TRNAMT")), _ofx_data(t.get("DTPOSTED"))
+        if valor is None or d is None:
+            continue
+        memo = _limpa(t.get("MEMO") or t.get("NAME"))
+        pn, pt = _parcela(memo)
+        desc = re.sub(r"\s*-\s*(NuPay\s*-\s*)?(Parcela\s*)?\d{1,2}/\d{1,2}\s*$", "", memo, flags=re.I)
+        desc = re.sub(r"\s*-\s*NuPay\s*$", "", desc, flags=re.I).strip()
+        linhas.append(Linha(data=d, descricao=desc or memo, valor=-valor, parcela_num=pn, parcela_total=pt))
+    bal = re.search(r"<LEDGERBAL>.*?<BALAMT>([^<\r\n]+)", texto, re.S | re.I)
+    total = -_num_br(bal.group(1)) if bal and _num_br(bal.group(1)) is not None else None
+    m = re.search(r"(\d{4}-\d{2}-\d{2})", nome or "")
+    venc = date.fromisoformat(m.group(1)) if m else None
+    fat = Fatura(banco, "ofx", linhas, venc, total_banco=total)
+    if venc is None:
+        fat.avisos.append("O arquivo não traz a data de vencimento; confira abaixo.")
+    return fat
+
+
+def _e_ofx(nome, dados):
+    return nome.lower().endswith(".ofx") or b"<OFX>" in dados[:3000].upper()
+
+
 def _e_itau(nome, dados):
     return nome.lower().endswith(".xlsx") and b"xl/" in dados[:4000] and "fatura" in nome.lower()
 
@@ -173,6 +211,7 @@ def _e_nubank(nome, dados):
 LEITORES = [
     ("Itaú (.xlsx)", _e_itau, _ler_itau_xlsx),
     ("Nubank (.csv)", _e_nubank, _ler_nubank_csv),
+    ("OFX de cartão — Nubank e outros (.ofx)", _e_ofx, _ler_ofx),
 ]
 
 
@@ -321,11 +360,41 @@ def plano_futuras(u, conta_id, fat: Fatura, regs: pd.DataFrame, vencimento: date
 
 
 def gravar(u, conta_id, fat: Fatura, vencimento: date, novas: pd.DataFrame, futuras: list[dict],
-           nome_arquivo: str) -> dict:
-    """novas: linhas escolhidas (com categoria_id). futuras: de plano_futuras()."""
+           nome_arquivo: str, vincular: pd.DataFrame | None = None) -> dict:
+    """novas: linhas escolhidas (com categoria_id). futuras: de plano_futuras().
+    vincular: linhas 'ja_lancada' — o lançamento que já estava no app (planilha, Apple Pay…) ganha a data da
+    compra, a parcela e a chave da fatura; as parcelas seguintes que vieram da planilha são numeradas."""
     grupos: dict[int, uuid.UUID] = {}
-    n = 0
+    n = nv = 0
     with db.transacao() as s:
+        for r in (vincular.itertuples() if vincular is not None and not vincular.empty else []):
+            ln = fat.linhas[r.i]
+            g = None
+            if ln.parcela_num:
+                atual = s.execute(text("select grupo_parcela from lancamentos where id = :i"),
+                                  dict(i=r.existente_id)).scalar()
+                g = grupos.setdefault(r.i, atual or uuid.uuid4())
+            nv += s.execute(text("""
+                update lancamentos set data_compra = coalesce(data_compra, :dc),
+                       parcela_num = coalesce(parcela_num, :pn), parcela_total = coalesce(parcela_total, :pt),
+                       grupo_parcela = coalesce(grupo_parcela, :g), chave_importacao = coalesce(chave_importacao, :k),
+                       atualizado_em = now()
+                 where id = :i and dono_id = :u"""),
+                dict(dc=ln.data, pn=ln.parcela_num, pt=ln.parcela_total, g=g, k=r.chave, i=r.existente_id,
+                     u=u["id"])).rowcount
+            if ln.parcela_num and ln.parcela_num < ln.parcela_total:
+                seguintes = s.execute(text("""
+                    select id from lancamentos
+                     where dono_id = :u and conta_id = :c and mes_ref > :m and status <> 'cancelado'
+                       and parcela_num is null and abs(valor - :v) < 0.011 and lower(descricao) = lower(:d)
+                     order by mes_ref limit :q"""),
+                    dict(u=u["id"], c=conta_id, m=mes_ref(vencimento), v=ln.valor, d=r.existente_desc,
+                         q=ln.parcela_total - ln.parcela_num)).scalars().all()
+                for k, lid in enumerate(seguintes, start=1):
+                    s.execute(text("""update lancamentos set parcela_num = :pn, parcela_total = :pt,
+                                             grupo_parcela = :g, data_compra = coalesce(data_compra, :dc)
+                                       where id = :i"""),
+                              dict(pn=ln.parcela_num + k, pt=ln.parcela_total, g=g, dc=ln.data, i=lid))
         def ins(desc, valor, compra, venc, cat, pn, pt, grupo, k):
             r = s.execute(text("""
                 insert into lancamentos (dono_id, conta_id, categoria_id, tipo, descricao, valor, data_compra,
@@ -361,7 +430,7 @@ def gravar(u, conta_id, fat: Fatura, vencimento: date, novas: pd.DataFrame, futu
                                where id = :c and dono_id = :u
                                  and coalesce(finais_cartao, '') not like '%' || :f || '%'"""),
                       dict(f=fat.final, c=conta_id, u=u["id"]))
-    return {"novas": n, "futuras": nf}
+    return {"novas": n, "futuras": nf, "vinculadas": nv}
 
 
 def conta_sugerida(u, fat: Fatura, contas: pd.DataFrame):

@@ -77,6 +77,23 @@ def selo(nome, inst=None, tam=40) -> str:
             f"background:linear-gradient(135deg,{b['c1']},{b['c2']})'>{esc(b['sigla'])}</div>")
 
 
+BANDEIRAS = [  # (trecho do nome/instituição, arquivo) — a 1ª que bater vale; nome do cartão manda
+    ("visa", "visa"), ("master", "mastercard"), ("elo", "elo"), ("amex", "amex"), ("american express", "amex"),
+    ("hipercard", "hipercard"), ("latam", "mastercard"), ("nubank", "mastercard"), ("picpay", "mastercard"),
+    ("inter", "mastercard"), ("c6", "mastercard"), ("mercado pago", "visa"), ("xp", "visa"),
+]
+
+
+def bandeira(nome, inst=None, alt=20) -> str:
+    """Logo da bandeira (Visa, Mastercard…) num chip branco; vazio se não souber."""
+    t = sem_acento(f"{nome} {inst or ''}")
+    arq = next((a for chave, a in BANDEIRAS if re.search(rf"\b{chave}", t)), None)
+    uri = _logo_uri(f"bandeira-{arq}") if arq else None
+    if not uri:
+        return ""
+    return (f"<span class='ui-band'><img src='{uri}' alt='{esc(arq)}' style='height:{alt}px;width:{int(alt * 1.9)}px;object-fit:contain'></span>")
+
+
 # ---------------------------------------------------------------------------------------------
 # CSS
 # ---------------------------------------------------------------------------------------------
@@ -95,6 +112,9 @@ CSS = """
 .ui-hero .mini .v {font-size: 1.08rem; font-weight: 700; margin-top: 2px; white-space: nowrap;}
 .ui-selo {border-radius: 11px; background: #fff; display: flex; align-items: center; justify-content: center;
           flex-shrink: 0; box-shadow: 0 1px 4px rgba(0,0,0,.18);}
+.ui-band {margin-left: auto; background: #fff; border-radius: 7px; padding: 3px 6px; display: inline-flex;
+           align-items: center; box-shadow: 0 1px 4px rgba(0,0,0,.18); flex-shrink: 0;}
+.ui-hero .dir .ui-band {margin-left: 10px;}
 .ui-selo-txt {color: #fff; font-weight: 800; font-size: .8rem; letter-spacing: .4px;}
 .ui-grade {display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-bottom: 14px;}
 .ui-card {border-radius: 14px; padding: 12px 14px; background: rgba(128,128,128,.06);
@@ -157,13 +177,13 @@ def css():
 
 
 def hero(titulo, rotulo, valor, minis: list[tuple[str, str]], c1="#1F2A44", c2="#3B4C75", selo_html="",
-         direita="", sub=""):
+         direita="", sub="", direita_html=""):
     minis_html = "".join(f"<div class='mini'><div class='l'>{esc(l)}</div><div class='v'>{esc(v)}</div></div>"
                          for l, v in minis)
     if not selo_html:
         selo_html = "<div class='ui-selo ui-selo-txt' style='width:40px;height:40px;background:rgba(255,255,255,.2)'>Σ</div>"
     render(f"""<div class="ui-hero" style="background:linear-gradient(135deg,{c1} 0%,{c2} 100%)">
-        <div class="topo">{selo_html}{esc(titulo)}<span class="dir">{esc(direita)}</span></div>
+        <div class="topo">{selo_html}{esc(titulo)}<span class="dir">{esc(direita)}{direita_html}</span></div>
         <div class="rot">{esc(rotulo)}</div><div class="valor">{esc(valor)}</div>
         {f'<div class="sub">{esc(sub)}</div>' if sub else ''}
         <div class="linha">{minis_html}</div></div>""")
