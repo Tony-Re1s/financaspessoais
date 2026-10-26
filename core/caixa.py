@@ -42,11 +42,11 @@ def novo_token(u) -> str:
 
 
 def pendentes(u) -> pd.DataFrame:
-    return db.consultar("""
+    return normalizar(db.consultar("""
         select c.id, c.recebido_em, c.origem, c.valor_texto, c.estabelecimento, c.cartao, c.nome
           from caixa_entrada c join usuarios us on us.token_atalho = c.token
          where us.id = :u and c.status = 'pendente'
-         order by c.recebido_em desc""", u=u["id"])
+         order by c.recebido_em desc""", u=u["id"]))
 
 
 def qtd_pendentes(u) -> int:
@@ -133,13 +133,69 @@ def lancar(u, item_id, linhas: list[dict]):
                 values (:uid, :conta_id, :categoria_id, 'despesa', :descricao, :valor, :data_compra,
                     :data_vencimento, :forma_pagamento, cast(:status as status_lancamento),
                     case when :status = 'pago' then :data_vencimento end, :parcela_num, :parcela_total,
-                    :grupo_parcela, cast(:visibilidade as visibilidade), 'applepay')
+                    :grupo_parcela, cast(:visibilidade as visibilidade), cast(:origem as origem_registro))
                 returning id"""), {"uid": u["id"]} | {k: p.get(k) for k in [
                     "conta_id", "categoria_id", "descricao", "valor", "data_compra", "data_vencimento",
                     "forma_pagamento", "parcela_num", "parcela_total", "grupo_parcela", "visibilidade"]}
-                   | {"status": p.get("status") or "previsto"})
+                   | {"status": p.get("status") or "previsto",
+                      "origem": p.get("origem") or "applepay"})
             ids.append(r.scalar())
         s.execute(text("""update caixa_entrada c set status = 'lancado', lancamento_id = :l, tratado_em = now()
                             from usuarios us where c.id = :i and us.token_atalho = c.token and us.id = :u"""),
                   {"l": ids[0], "i": item_id, "u": u["id"]})
     return len(ids)
+
+
+# ---------------------------------------------------------------------------
+# Android: o MacroDroid manda o texto cru da notificação; aqui viram campos
+#   valor_texto = texto da notificação · estabelecimento = título · cartao = app
+# ---------------------------------------------------------------------------
+_RE_VALOR = re.compile(r"R\$\s*-?\s*(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2}|\d+(?:\.\d{2})?)")
+_RE_FINAL = re.compile(r"(?:final|terminad[oa] em|•+|\*{2,}|x{2,})\s*(\d{4})", re.I)
+_RE_LOCAL = re.compile(
+    r"\b(?:em|no|na|com|para)\s+(?!o\s+cart|seu\s|sua\s|cart[ãa]o|d[ée]bito|cr[ée]dito|R\$|\d|valor\b|visa\b|master|elo\b|amex|hiper)"
+    r"([A-Za-z0-9*][^\n,;]*?)(?=\s+(?:para|no cart|com o cart|foi|às|as \d|em \d|no dia|no valor|final)\b|[,;.\n]|\s*$)",
+    re.I)
+_GENERICO = re.compile(r"compra|aprovad|transa[çc][ãa]o|pagamento|cart[ãa]o|d[ée]bito|cr[ée]dito|notifica|wallet|carteira",
+                       re.I)
+
+
+def ler_notificacao(texto: str, titulo: str | None, app: str | None) -> dict:
+    """Tira valor, estabelecimento, final do cartão e crédito/débito do texto de uma notificação."""
+    t = f"{texto or ''}"
+    out = {"valor": None, "estabelecimento": None, "final": None, "funcao": None}
+    if m := _RE_VALOR.search(t) or _RE_VALOR.search(titulo or ""):
+        out["valor"] = valor_de_texto(m.group(1))
+    if m := _RE_FINAL.search(t):
+        out["final"] = m.group(1)
+    if re.search(r"d[ée]bito", t, re.I):
+        out["funcao"] = "debito"
+    elif re.search(r"cr[ée]dito", t, re.I):
+        out["funcao"] = "credito"
+    # 'R$ 45,90 - PADARIA X' (Itaú) ou '... em PADARIA X ...'
+    if m := re.search(r"R\$\s*[\d.,]+\s*[-–]\s*([^\n\-–]+?)\s*(?:[-–]|$)", t):
+        out["estabelecimento"] = m.group(1).strip()
+    elif m := _RE_LOCAL.search(t.replace(m.group(0), "") if (m := _RE_VALOR.search(t)) else t):
+        out["estabelecimento"] = m.group(1).strip(" .")
+    carteira = re.search(r"carteira|wallet|google pay|samsung", app or "", re.I)
+    if titulo and not _GENERICO.search(titulo) and (carteira or not out["estabelecimento"]):
+        out["estabelecimento"] = titulo.strip()      # Google Carteira: o título é a loja
+    return out
+
+
+def normalizar(df: pd.DataFrame) -> pd.DataFrame:
+    """Linhas do Android ganham valor/estabelecimento/cartão já separados."""
+    if df.empty or "origem" not in df:
+        return df.assign(funcao=None) if not df.empty else df
+    df = df.copy()
+    df["funcao"] = None
+    df["texto_original"] = None
+    for i, r in df[df["origem"] == "android"].iterrows():
+        n = ler_notificacao(r["valor_texto"], r["estabelecimento"], r["cartao"])
+        df.at[i, "texto_original"] = f"{r['estabelecimento'] or ''} — {r['valor_texto'] or ''}".strip(" —")
+        df.at[i, "valor_texto"] = f"{n['valor']:.2f}" if n["valor"] is not None else r["valor_texto"]
+        df.at[i, "estabelecimento"] = n["estabelecimento"]
+        app = (r["cartao"] or "Android").strip()
+        df.at[i, "cartao"] = f"{app} final {n['final']}" if n["final"] else app
+        df.at[i, "funcao"] = n["funcao"]
+    return df

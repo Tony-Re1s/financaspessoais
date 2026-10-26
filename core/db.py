@@ -54,6 +54,19 @@ _MIGRACOES = [
     # 004 — finais do cartão (reconhece o cartão ao importar a fatura)
     ("select 1 from information_schema.columns where table_name = 'contas' and column_name = 'finais_cartao'",
      "alter table contas add column if not exists finais_cartao text"),
+    # 005 — origem 'android' (notificações lidas pelo MacroDroid)
+    ("select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid "
+     "where t.typname = 'origem_registro' and e.enumlabel = 'android'",
+     "alter type origem_registro add value if not exists 'android'"),
+    # 006 — acessos: quem pode entrar e o que pode fazer (gerenciado pelo admin no app)
+    ("select 1 from information_schema.tables where table_name = 'acessos'",
+     """create table if not exists acessos (
+          email          text primary key,
+          ativo          boolean not null default true,
+          permissoes     jsonb not null default '{}'::jsonb,
+          convidado_por  uuid references usuarios(id) on delete set null,
+          criado_em      timestamptz not null default now(),
+          ultimo_acesso  timestamptz)"""),
 ]
 
 

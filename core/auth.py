@@ -1,7 +1,7 @@
 """Login com Google (st.login) + lista de e-mails autorizados."""
 import streamlit as st
 
-from core import db
+from core import acesso, db
 from core.semente import garantir_usuario
 
 
@@ -68,16 +68,24 @@ def exigir_login() -> dict:
             _tela_login()
         email, nome = st.user.get("email"), st.user.get("name")
 
-    permitidos = [e.strip().lower() for e in _cfg("emails_permitidos", [])]
-    if not email or email.lower() not in permitidos:
-        st.error(f"O e-mail **{email}** não tem acesso a este app.")
+    pode, _ = acesso.situacao(email)
+    if not email or not pode:
+        st.error(f"O e-mail **{email}** não tem acesso a este app. Peça ao administrador para convidar você.")
         st.button("Sair", on_click=st.logout)
         st.stop()
 
     with db.transacao() as s:
         usuario = garantir_usuario(s, email, nome)
+    usuario["admin"] = acesso.e_admin(email)
+    acesso.registrar_acesso(email)
     st.session_state["usuario"] = usuario
     return usuario
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def permissoes(email: str) -> tuple[bool, dict]:
+    """Relida a cada minuto: o que o admin muda vale sem a pessoa sair e entrar."""
+    return acesso.situacao(email)
 
 
 def sair():

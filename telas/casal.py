@@ -26,11 +26,11 @@ if not pend.empty:
         if c2.button("Cancelar", key=f"cc_{r.email}"):
             repo.cancelar_convite(u, r.email); st.rerun()
 
-with st.form("convite", clear_on_submit=True):
-    email = st.text_input("Convidar por e-mail (conta Google)")
-    st.caption("O e-mail também precisa estar em `emails_permitidos` nos *secrets* do app.")
-    if st.form_submit_button("Convidar") and "@" in email:
-        repo.convidar(u, email); st.rerun()
+if u.get("admin"):
+    st.page_link("telas/usuarios.py", label="Convidar alguém e definir o que pode fazer",
+                 icon=":material/admin_panel_settings:")
+else:
+    st.caption("Convites são feitos pelo administrador do app.")
 
 st.divider()
 st.subheader("Como funciona a privacidade")

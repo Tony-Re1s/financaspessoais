@@ -1,21 +1,22 @@
 import pandas as pd
 import streamlit as st
 
-from core import caixa, repo
-from core.fmt import FUSO, brl, vencimento_fatura
+from core import caixa, ia, repo
+from core.fmt import FUSO, brl, hoje, vencimento_fatura
 from telas._comum import opcoes_categoria, usuario
 
 u = usuario()
 st.title("Caixa de entrada")
-st.caption("Compras que chegaram sozinhas (Apple Pay). Confira crédito ou débito, a categoria e o cartão e toque em **Lançar**.")
+st.caption("Compras que chegaram sozinhas (Apple Pay no iPhone, notificações no Android). Confira crédito ou débito, a categoria e o cartão e toque em **Lançar**.")
 
 if msg := st.session_state.pop("_ok_caixa", None):
     st.success(msg, icon=":material/check_circle:")
 
 pend = caixa.pendentes(u)
 if pend.empty:
-    st.info("Nada pendente. Quando você pagar com o Apple Pay, a compra aparece aqui.", icon=":material/inbox:")
-    st.page_link("telas/atalho.py", label="Configurar o Atalho do iPhone", icon=":material/phone_iphone:")
+    st.info("Nada pendente. Quando você pagar (Apple Pay ou notificação no Android), a compra aparece aqui.",
+            icon=":material/inbox:")
+    st.page_link("telas/atalho.py", label="Configurar o celular (iPhone ou Android)", icon=":material/smartphone:")
 else:
     contas = repo.contas(u)
     cartoes = contas[contas["tipo"] == "cartao_credito"]
@@ -28,7 +29,21 @@ else:
     def _id(v):
         return None if v is None or pd.isna(v) else v
 
+    @st.cache_data(ttl=3600, show_spinner=False)
+    def _ia_notificacao(item_id, texto):
+        """Notificação em formato que o leitor não conhece: a IA separa valor e loja (1x por item)."""
+        r = ia.interpretar({}, {}, hoje(), texto=f"Notificação de compra do banco: {texto}")
+        return r.get("valor_total"), r.get("descricao")
+
     for item in pend.itertuples():
+        if item.origem == "android" and (item.estabelecimento is None or caixa.valor_de_texto(item.valor_texto) is None) \
+                and ia.chave() and item.texto_original:
+            try:
+                v_ia, loja_ia = _ia_notificacao(str(item.id), item.texto_original)
+                item = item._replace(valor_texto=item.valor_texto if caixa.valor_de_texto(item.valor_texto) else str(v_ia),
+                                     estabelecimento=item.estabelecimento or loja_ia)
+            except Exception:  # noqa: BLE001 — sem IA, segue com o que tem
+                pass
         valor = caixa.valor_de_texto(item.valor_texto)
         quando = pd.Timestamp(item.recebido_em).tz_convert(FUSO)
         k = str(item.id)
@@ -40,6 +55,8 @@ else:
             preco.markdown(f"<div style='text-align:right;font-size:1.15rem;font-weight:600'>"
                            f"{brl(valor) if valor is not None else item.valor_texto}</div>",
                            unsafe_allow_html=True)
+            if item.origem == "android" and item.texto_original:
+                st.caption(f"🔔 {item.texto_original}")
 
             # o que já sabemos deste cartão da Carteira
             ligada = caixa.conta_do_cartao(u, item.cartao)
@@ -47,7 +64,7 @@ else:
             banco_sug = ligada if ligada in op_bancos else None
             if cartao_sug is not None:
                 banco_sug = _id(cartoes.loc[cartoes["id"] == cartao_sug, "conta_debito_id"].iloc[0])
-            funcao_sug = (caixa.ultima_funcao(u, item.cartao)
+            funcao_sug = (item.funcao or caixa.ultima_funcao(u, item.cartao)
                           or ("debito" if ligada is not None and cartao_sug is None else "credito"))
 
             funcao = st.segmented_control("Função", list(FUNCOES), format_func=FUNCOES.get,
@@ -90,7 +107,8 @@ else:
                     forma, status, n_parc = "Cartao de Credito", "previsto", int(parcelas)
                 dados = dict(conta_id=conta_id, categoria_id=categoria_id, descricao=descricao.strip() or "Apple Pay",
                              valor=valor_ed, data_compra=compra, data_vencimento=venc, forma_pagamento=forma,
-                             status=status, visibilidade=None)
+                             status=status, visibilidade=None,
+                             origem="android" if item.origem == "android" else "applepay")
                 linhas = repo.plano_parcelas(dados, 1, n_parc, valor_e_total=True)
                 caixa.lancar(u, item.id, linhas)
                 if item.cartao:   # sempre aprende: próxima compra deste cartão já vem preenchida

@@ -12,8 +12,16 @@ st.set_page_config(page_title="Finanças", page_icon="💰", layout="wide",
                    initial_sidebar_state="auto")
 st.markdown(CSS, unsafe_allow_html=True)
 
-usuario = auth.exigir_login()
 db.migrar()
+usuario = auth.exigir_login()
+ativo, perm = auth.permissoes(usuario["email"])
+if not ativo:
+    st.session_state.clear()
+    st.error("Seu acesso foi desativado pelo administrador.")
+    st.button("Sair", on_click=auth.sair)
+    st.stop()
+usuario["permissoes"] = perm
+usuario.setdefault("admin", auth.acesso.e_admin(usuario["email"]))   # sessões abertas antes desta versão
 
 @st.cache_data(ttl=6 * 3600, show_spinner=False)
 def _completar_fixas(uid, dia):
@@ -31,34 +39,48 @@ try:
 except Exception:  # noqa: BLE001 — tabela ainda não criada
     n_caixa = 0
 
+def _p(perm, *args, **kw):
+    """Página só entra no menu se a pessoa tiver a permissão (None = todos)."""
+    return st.Page(*args, **kw) if perm is None or perm == "admin" and usuario["admin"] \
+        or perm != "admin" and perm_ok(perm) else None
+
+
+def perm_ok(chave):
+    return usuario["admin"] or usuario["permissoes"].get(chave, False)
+
+
 paginas = {
     "Visão geral": [
-        st.Page("telas/painel.py", title="Painel", icon=":material/dashboard:", default=True),
+        _p(None, "telas/painel.py", title="Painel", icon=":material/dashboard:", default=True),
     ],
     "Movimento": [
-        st.Page("telas/caixa_entrada.py", title=f"Caixa de entrada{f' ({n_caixa})' if n_caixa else ''}",
-                icon=":material/inbox:"),
-        st.Page("telas/lancamento_rapido.py", title="Lançamento rápido", icon=":material/photo_camera:"),
-        st.Page("telas/novo_lancamento.py", title="Novo lançamento", icon=":material/add_circle:"),
-        st.Page("telas/lancamentos.py", title="Lançamentos", icon=":material/receipt_long:"),
-        st.Page("telas/contas_fixas.py", title="Contas fixas", icon=":material/event_repeat:"),
+        _p("lancar", "telas/caixa_entrada.py", title=f"Caixa de entrada{f' ({n_caixa})' if n_caixa else ''}",
+           icon=":material/inbox:"),
+        _p("ia", "telas/lancamento_rapido.py", title="Lançamento rápido", icon=":material/photo_camera:"),
+        _p("lancar", "telas/novo_lancamento.py", title="Novo lançamento", icon=":material/add_circle:"),
+        _p(None, "telas/lancamentos.py", title="Lançamentos", icon=":material/receipt_long:"),
+        _p("contas_fixas", "telas/contas_fixas.py", title="Contas fixas", icon=":material/event_repeat:"),
     ],
     "Importar": [
-        st.Page("telas/importar_fatura.py", title="Fatura de cartão", icon=":material/credit_card:"),
-        st.Page("telas/importar.py", title="Planilha", icon=":material/upload_file:"),
+        _p("importar", "telas/importar_fatura.py", title="Fatura de cartão", icon=":material/credit_card:"),
+        _p("importar", "telas/importar.py", title="Planilha", icon=":material/upload_file:"),
     ],
     "Cadastros": [
-        st.Page("telas/contas.py", title="Contas e cartões", icon=":material/account_balance:"),
-        st.Page("telas/categorias.py", title="Categorias", icon=":material/category:"),
-        st.Page("telas/casal.py", title="Casal e privacidade", icon=":material/group:"),
-        st.Page("telas/atalho.py", title="Atalho do iPhone", icon=":material/phone_iphone:"),
+        _p("cadastros", "telas/contas.py", title="Contas e cartões", icon=":material/account_balance:"),
+        _p("cadastros", "telas/categorias.py", title="Categorias", icon=":material/category:"),
+        _p("casal", "telas/casal.py", title="Casal e privacidade", icon=":material/group:"),
+        _p("lancar", "telas/atalho.py", title="Celular (iPhone e Android)", icon=":material/smartphone:"),
+        _p("admin", "telas/usuarios.py", title="Usuários e permissões", icon=":material/admin_panel_settings:"),
     ],
 }
+paginas = {grupo: [p for p in lista if p is not None] for grupo, lista in paginas.items()}
+paginas = {grupo: lista for grupo, lista in paginas.items() if lista}
 
 nav = st.navigation(paginas)
 
 with st.sidebar:
-    st.caption(f"Conectado como **{usuario['nome']}**  \n{usuario['email']}")
+    st.caption(f"Conectado como **{usuario['nome']}**{' · 🛡️ admin' if usuario['admin'] else ''}  \n"
+               f"{usuario['email']}")
     st.toggle("📱 Layout de celular", value=e_celular(), key="modo_celular")
     st.button("Sair", icon=":material/logout:", on_click=auth.sair, use_container_width=True)
 
