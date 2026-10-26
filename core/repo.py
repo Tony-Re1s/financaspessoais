@@ -61,7 +61,7 @@ def contas(u, so_ativas=True) -> pd.DataFrame:
     return db.consultar(f"""
         select id, nome, tipo::text as tipo, instituicao, dia_fechamento, dia_vencimento, limite,
                saldo_inicial, data_saldo_inicial, visibilidade::text as visibilidade, ativa,
-               conta_debito_id, finais_cartao, conta_pagamento_id
+               conta_debito_id, finais_cartao, conta_pagamento_id, cor
           from contas where dono_id = :uid {"and ativa" if so_ativas else ""}
          order by tipo, nome""", uid=u["id"])
 
@@ -69,23 +69,23 @@ def contas(u, so_ativas=True) -> pd.DataFrame:
 def salvar_conta(u, dados: dict, conta_id=None):
     campos = ["nome", "tipo", "instituicao", "dia_fechamento", "dia_vencimento", "limite",
               "saldo_inicial", "data_saldo_inicial", "visibilidade", "ativa", "conta_debito_id",
-              "conta_pagamento_id"]
+              "conta_pagamento_id", "cor"]
     p = {k: dados.get(k) for k in campos} | {"uid": u["id"], "id": conta_id}
     if conta_id:
         db.executar("""update contas set nome=:nome, tipo=cast(:tipo as tipo_conta), instituicao=:instituicao,
                          dia_fechamento=:dia_fechamento, dia_vencimento=:dia_vencimento, limite=:limite,
                          saldo_inicial=coalesce(:saldo_inicial,0), data_saldo_inicial=:data_saldo_inicial,
                          visibilidade=cast(:visibilidade as visibilidade), ativa=coalesce(:ativa,true),
-                         conta_debito_id=:conta_debito_id, conta_pagamento_id=:conta_pagamento_id
+                         conta_debito_id=:conta_debito_id, conta_pagamento_id=:conta_pagamento_id, cor=:cor
                        where id=:id and dono_id=:uid""", **p)
     else:
         db.executar("""insert into contas (dono_id, nome, tipo, instituicao, dia_fechamento, dia_vencimento,
                          limite, saldo_inicial, data_saldo_inicial, visibilidade, ativa, conta_debito_id,
-                         conta_pagamento_id)
+                         conta_pagamento_id, cor)
                        values (:uid, :nome, cast(:tipo as tipo_conta), :instituicao, :dia_fechamento,
                          :dia_vencimento, :limite, coalesce(:saldo_inicial,0), :data_saldo_inicial,
                          cast(:visibilidade as visibilidade), coalesce(:ativa,true), :conta_debito_id,
-                         :conta_pagamento_id)""", **p)
+                         :conta_pagamento_id, :cor)""", **p)
 
 
 def qtd_lancamentos_conta(u, conta_id) -> int:

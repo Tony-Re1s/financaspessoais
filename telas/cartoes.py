@@ -96,7 +96,7 @@ if sel not in set(res["cartao_id"]):
 tiles = []
 for r in ordem.itertuples():
     c = info.loc[r.cartao_id]
-    b = _ui.banco(c["nome"], c["instituicao"])
+    b = _ui.banco(c["nome"], c["instituicao"], c.get("cor"))
     d = por_cartao[r.cartao_id]
     val = float(d["total"].sum())
     venc = f"vence {d['vencimento'].min():%d/%m}" if not d.empty else "sem fatura no período"
@@ -126,7 +126,7 @@ nomes = {r.cartao_id: info.loc[r.cartao_id, "nome"] for r in ordem.itertuples()}
 sel = st.segmented_control("Ver fatura de", list(nomes), format_func=nomes.get, default=sel, key="cart_sel_w") or sel
 st.session_state["cart_sel"] = sel
 c = info.loc[sel]
-b = _ui.banco(c["nome"], c["instituicao"])
+b = _ui.banco(c["nome"], c["instituicao"], c.get("cor"))
 f_cart = fat[fat["cartao_id"] == sel].sort_values("mes_ref")
 r_cart = res[res["cartao_id"] == sel].iloc[0]
 

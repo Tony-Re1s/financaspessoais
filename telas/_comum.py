@@ -36,11 +36,17 @@ def cartoes_kpi(itens: list[tuple[str, str]]):
 
 CSS = """
 <style>
-/* olho de esconder valores: no canto direito, na altura do título */
+/* olho de esconder valores (static/olho.js): no canto direito, na altura do título */
 .block-container {position: relative;}
-.st-key-olho {position: absolute !important; top: 2.6rem; right: 1rem; width: auto !important; z-index: 5;}
-.st-key-olho button {border-radius: 99px; min-height: 38px; width: 42px; padding: 0;}
-@media (max-width: 640px) {.st-key-olho {top: 4.6rem; right: .4rem;}}
+.st-key-olhojs {position: absolute !important; height: 0; overflow: hidden;}
+#fin-olho {position: absolute; top: 2.6rem; right: 1rem; z-index: 5; width: 42px; height: 38px; border-radius: 99px;
+           border: 1px solid rgba(128,128,128,.3); background: var(--background-color, #fff); color: inherit;
+           display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;}
+#fin-olho:hover {border-color: #0E7C6B; color: #0E7C6B;}
+@media (max-width: 640px) {#fin-olho {top: 4.6rem; right: .4rem;}}
+html.fin-oculto [data-testid="stVegaLiteChart"], html.fin-oculto [data-testid="stArrowVegaLiteChart"],
+html.fin-oculto [data-testid="stPlotlyChart"], html.fin-oculto [data-testid="stMetricValue"],
+html.fin-oculto [data-testid="stMetricDelta"] {filter: blur(9px); pointer-events: none;}
 .block-container {padding-top: 2.2rem; padding-bottom: 4rem;}
 .kpis {display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .6rem; margin: .2rem 0 1rem;}
 .kpi {border: 1px solid rgba(49,51,63,.15); border-radius: .6rem; padding: .7rem .8rem;}

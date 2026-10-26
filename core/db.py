@@ -90,6 +90,9 @@ _MIGRACOES = [
           detalhe        jsonb,
           atualizado_em  timestamptz not null default now(),
           primary key (dono_id, mes_ref))"""),
+    # 010 — cor escolhida pelo usuário para o cartão/conta (hex); vazio = cor do banco
+    ("select 1 from information_schema.columns where table_name = 'contas' and column_name = 'cor'",
+     "alter table contas add column if not exists cor text"),
 ]
 
 

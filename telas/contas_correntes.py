@@ -135,7 +135,7 @@ s_hoje = s_ini + (float(ext.loc[ext["data"] <= hoje(), "valor"].sum()) if not ex
 if escolha == "todas":
     c1, c2, selo, titulo = "#1F2A44", "#3B4C75", "", "Todas as contas"
 else:
-    b = _ui.banco(nomes[escolha], inst.get(escolha))
+    b = _ui.banco(nomes[escolha], inst.get(escolha), dict(zip(caixa["id"].astype(str), caixa["cor"])).get(escolha))
     c1, c2, titulo = b["c1"], b["c2"], nomes[escolha]
     selo = _ui.selo(nomes[escolha], inst.get(escolha), 40)
 fim_rot = "Previsto" if fim > hoje() else "Saldo"

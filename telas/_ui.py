@@ -38,6 +38,7 @@ def render(s: str):
 # bancos: logo + cores do degradê (escuras o bastante para texto branco)
 # ---------------------------------------------------------------------------------------------
 BANCOS = [  # (trecho do nome/instituição, arquivo do logo, cor 1, cor 2)
+    ("ultravioleta", "nubank", "#1E0636", "#4A1782"), ("nubank black", "nubank", "#1E0636", "#4A1782"),
     ("latam", "itau", "#B3123F", "#E0245E"), ("uniclass", "itau", "#17213F", "#34416B"),
     ("visa infinity", "itau", "#17213F", "#34416B"), ("personnalite", "itau", "#17213F", "#34416B"),
     ("itau", "itau", "#C25700", "#E57A12"), ("nubank", "nubank", "#6A0BB0", "#9A3EE0"),
@@ -57,14 +58,22 @@ def _logo_uri(arquivo: str) -> str | None:
     return "data:image/svg+xml;base64," + base64.b64encode(f.read_bytes()).decode() if f.exists() else None
 
 
-def banco(nome, inst=None) -> dict:
+def _clarear(hexcor: str, f=0.28) -> str:
+    h = hexcor.lstrip("#")
+    r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    return "#{:02X}{:02X}{:02X}".format(*(round(c + (255 - c) * f) for c in (r, g, b)))
+
+
+def banco(nome, inst=None, cor=None) -> dict:
+    """Logo e cores do degradê. cor = escolhida pelo usuário (vale mais que a do banco)."""
     t = sem_acento(f"{nome} {inst or ''}")
-    for chave, arq, c1, c2 in BANCOS:
-        if chave in t:
-            return {"logo": _logo_uri(arq), "c1": c1, "c2": c2,
-                    "sigla": "".join(p[0] for p in str(nome).split()[:2]).upper()}
-    return {"logo": None, "c1": "#2F3B52", "c2": "#56637E",
-            "sigla": "".join(p[0] for p in str(nome).split()[:2]).upper() or "$"}
+    sigla = "".join(p[0] for p in str(nome).split()[:2]).upper() or "$"
+    b = next(({"logo": _logo_uri(arq), "c1": c1, "c2": c2, "sigla": sigla}
+              for chave, arq, c1, c2 in BANCOS if chave in t),
+             {"logo": None, "c1": "#2F3B52", "c2": "#56637E", "sigla": sigla})
+    if isinstance(cor, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", cor):
+        b = b | {"c1": cor, "c2": _clarear(cor)}
+    return b
 
 
 def selo(nome, inst=None, tam=40) -> str:
@@ -84,14 +93,18 @@ BANDEIRAS = [  # (trecho do nome/instituição, arquivo) — a 1ª que bater val
 ]
 
 
+PREMIUM = re.compile(r"\b(black|infinit|ultravioleta)")
+
+
 def bandeira(nome, inst=None, alt=20) -> str:
-    """Logo da bandeira (Visa, Mastercard…) num chip branco; vazio se não souber."""
+    """Logo da bandeira (Visa, Mastercard…) num chip branco; Black/Infinite no padrão prata."""
     t = sem_acento(f"{nome} {inst or ''}")
     arq = next((a for chave, a in BANDEIRAS if re.search(rf"\b{chave}", t)), None)
     uri = _logo_uri(f"bandeira-{arq}") if arq else None
     if not uri:
         return ""
-    return (f"<span class='ui-band'><img src='{uri}' alt='{esc(arq)}' style='height:{alt}px;width:{int(alt * 1.9)}px;object-fit:contain'></span>")
+    cls = "ui-band prata" if PREMIUM.search(t) else "ui-band"
+    return (f"<span class='{cls}'><img src='{uri}' alt='{esc(arq)}' style='height:{alt}px;width:{int(alt * 1.9)}px;object-fit:contain'></span>")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -115,6 +128,9 @@ CSS = """
 .ui-band {margin-left: auto; background: #fff; border-radius: 7px; padding: 3px 6px; display: inline-flex;
            align-items: center; box-shadow: 0 1px 4px rgba(0,0,0,.18); flex-shrink: 0;}
 .ui-hero .dir .ui-band {margin-left: 10px;}
+.ui-band.prata {background: linear-gradient(135deg, rgba(255,255,255,.18), rgba(255,255,255,.06));
+                box-shadow: inset 0 0 0 1px rgba(255,255,255,.45);}
+.ui-band.prata img {filter: grayscale(1) brightness(1.9) contrast(.85);}
 .ui-selo-txt {color: #fff; font-weight: 800; font-size: .8rem; letter-spacing: .4px;}
 .ui-grade {display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-bottom: 14px;}
 .ui-card {border-radius: 14px; padding: 12px 14px; background: rgba(128,128,128,.06);

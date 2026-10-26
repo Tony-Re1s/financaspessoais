@@ -14,21 +14,10 @@ def hoje() -> date:
 MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
 
 
-def _oculto() -> bool:
-    """Valores escondidos (olho na tela). Fora do Streamlit, nunca."""
-    try:
-        import streamlit as st
-        return bool(st.session_state.get("ocultar_valores", False))
-    except Exception:  # noqa: BLE001
-        return False
-
-
 def brl(v, mostrar=False) -> str:
-    """R$ 1.234,56 — ou R$ •••• quando o usuário escondeu os valores (mostrar=True ignora)."""
+    """R$ 1.234,56 (o olho de esconder valores mascara na tela, pelo navegador)."""
     if v is None:
         return "—"
-    if not mostrar and _oculto():
-        return "R$ ••••"
     s = f"{abs(float(v)):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     return f"-R$ {s}" if float(v) < 0 else f"R$ {s}"
 

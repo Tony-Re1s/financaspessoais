@@ -74,6 +74,14 @@ with st.form("conta", border=True):
                          format_func=VISIBILIDADES.get)
     ativa = c2.toggle("Conta ativa", value=bool(atual.get("ativa", True)))
 
+    from telas import _ui
+    cor_atual = atual.get("cor") if isinstance(atual.get("cor"), str) and atual.get("cor") else None
+    padrao = _ui.banco(atual.get("nome", ""), atual.get("instituicao"))["c1"]
+    c1, c2 = st.columns([1, 2], vertical_alignment="bottom")
+    cor_propria = c1.toggle("Escolher a cor", value=cor_atual is not None,
+                            help="Desligado: usa a cor do banco/cartão. Ligado: usa a cor que você escolher.")
+    cor = c2.color_picker("Cor do cartão/conta", cor_atual or padrao)
+
     if st.form_submit_button("Salvar", type="primary"):
         if not nome.strip():
             st.error("Dê um nome para a conta.")
@@ -83,6 +91,7 @@ with st.form("conta", border=True):
                                       limite=limite or None, visibilidade=visib, ativa=ativa,
                                       conta_debito_id=conta_deb if tipo == "cartao_credito" else None,
                                       conta_pagamento_id=conta_pag if tipo == "cartao_credito" else None,
+                                      cor=cor if cor_propria else None,
                                       saldo_inicial=atual.get("saldo_inicial"),
                                       data_saldo_inicial=atual.get("data_saldo_inicial")),
                               conta_id=escolha)
