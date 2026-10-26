@@ -98,10 +98,10 @@ with st.form(f"rec_{escolha}"):
     c1, c2 = st.columns(2)
     cat_ids = list(op_cat)
     categoria_id = c1.selectbox("Categoria", cat_ids, format_func=op_cat.get, placeholder="Categoria",
-                                index=cat_ids.index(a["categoria_id"]) if a.get("categoria_id") in cat_ids else None)
+                                index=cat_ids.index(a.get("categoria_id")) if a.get("categoria_id") in cat_ids else None)
     conta_ids = list(op_contas)
     conta_id = c2.selectbox("Conta / cartão", conta_ids, format_func=op_contas.get,
-                            index=conta_ids.index(a["conta_id"]) if a.get("conta_id") in conta_ids else 0,
+                            index=conta_ids.index(a.get("conta_id")) if a.get("conta_id") in conta_ids else 0,
                             help="No cartão, o dia abaixo é o dia da cobrança; o app joga na fatura certa.")
     c1, c2, c3 = st.columns(3)
     dia = c1.number_input("Dia", 1, 31, int(_v("dia_vencimento", hoje().day)))
@@ -114,7 +114,7 @@ with st.form(f"rec_{escolha}"):
     op_vis = {None: "Herdar da categoria/conta"} | VISIBILIDADES
     vis_ids = list(op_vis)
     vis = st.selectbox("Quem vê", vis_ids, format_func=op_vis.get,
-                       index=vis_ids.index(a["visibilidade"]) if a.get("visibilidade") in vis_ids else 0)
+                       index=vis_ids.index(a.get("visibilidade")) if a.get("visibilidade") in vis_ids else 0)
     ok = st.form_submit_button("Salvar", type="primary", icon=":material/save:")
 
 if ok:
