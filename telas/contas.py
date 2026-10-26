@@ -55,10 +55,17 @@ with st.form("conta", border=True):
     op_deb = {None: "— não tem função débito"} | {r.id: r.nome for r in bancos.itertuples()}
     deb_atual = atual.get("conta_debito_id")
     deb_atual = None if deb_atual is None or pd.isna(deb_atual) else deb_atual
-    conta_deb = st.selectbox("Função débito sai da conta", list(op_deb), format_func=op_deb.get,
+    c1, c2 = st.columns(2)
+    conta_deb = c1.selectbox("Função débito sai da conta", list(op_deb), format_func=op_deb.get,
                              index=list(op_deb).index(deb_atual) if deb_atual in op_deb else 0,
                              help="Se este cartão também passa no débito, de qual conta corrente sai o dinheiro. "
                                   "Usado pela Caixa de entrada quando você escolhe Débito.")
+    op_pag = {None: "— não definida"} | {r.id: r.nome for r in bancos.itertuples()}
+    pag_atual = atual.get("conta_pagamento_id")
+    pag_atual = None if pag_atual is None or pd.isna(pag_atual) else pag_atual
+    conta_pag = c2.selectbox("Fatura paga pela conta", list(op_pag), format_func=op_pag.get,
+                             index=list(op_pag).index(pag_atual) if pag_atual in op_pag else 0,
+                             help="A fatura sai desta conta corrente no vencimento (entra no fluxo de caixa).")
 
     c1, c2 = st.columns(2)
     vis_keys = list(VISIBILIDADES)
@@ -75,10 +82,26 @@ with st.form("conta", border=True):
                                       dia_fechamento=fech or None, dia_vencimento=venc or None,
                                       limite=limite or None, visibilidade=visib, ativa=ativa,
                                       conta_debito_id=conta_deb if tipo == "cartao_credito" else None,
+                                      conta_pagamento_id=conta_pag if tipo == "cartao_credito" else None,
                                       saldo_inicial=atual.get("saldo_inicial"),
                                       data_saldo_inicial=atual.get("data_saldo_inicial")),
                               conta_id=escolha)
             st.session_state["_ok_conta"] = f"Conta **{nome}** salva."
             st.rerun()
 
-st.caption("Saldos e aplicações entram no próximo módulo (Saldos e patrimônio).")
+if escolha:
+    n_lanc = repo.qtd_lancamentos_conta(u, escolha)
+    with st.popover("🗑️ Excluir conta"):
+        if n_lanc:
+            st.caption(f"Esta conta tem **{n_lanc} lançamentos**. Excluir apaga a conta e deixa os lançamentos "
+                       "sem conta. Se só não usa mais, prefira desligar **Conta ativa** (some das listas, "
+                       "mas o histórico fica).")
+        else:
+            st.caption("Conta sem lançamentos — pode excluir sem perder nada.")
+        if st.button("Excluir de vez", type="primary"):
+            repo.excluir_conta(u, escolha)
+            st.session_state["_ok_conta"] = "Conta excluída."
+            st.rerun()
+
+st.caption("Saldos: em **Contas correntes** (informar saldo real) e **Patrimônio** (FGTS, financiamento). "
+           "Aplicações: em **Investimentos**.")

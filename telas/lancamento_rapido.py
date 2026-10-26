@@ -125,7 +125,7 @@ if b1.button("Salvar", type="primary", icon=":material/save:", use_container_wid
              help=f"Falta: {', '.join(faltando)}" if faltando else None):
     comp_id = None
     if st.session_state.get("rap_img"):
-        comp_id = db.um("""insert into comprovantes (dono_id, imagem, mime, dados_ia)
+        comp_id = db.gravar_retornando("""insert into comprovantes (dono_id, imagem, mime, dados_ia)
                            values (:u, :img, 'image/jpeg', cast(:d as jsonb)) returning id""",
                         u=u["id"], img=st.session_state["rap_img"], d=r.get("_bruto") or json.dumps({}))["id"]
     dados = dict(conta_id=conta_id, categoria_id=categoria_id, tipo=tipo, descricao=descricao.strip(),

@@ -41,6 +41,13 @@ def um(sql: str, **params) -> dict | None:
         return dict(row) if row else None
 
 
+def gravar_retornando(sql: str, **params) -> dict | None:
+    """INSERT/UPDATE ... RETURNING com commit (db.um() só lê, não grava)."""
+    with transacao() as s:
+        row = s.execute(text(sql), params).mappings().first()
+        return dict(row) if row else None
+
+
 def executar(sql: str, **params) -> int:
     with transacao() as s:
         return s.execute(text(sql), params).rowcount
@@ -67,6 +74,22 @@ _MIGRACOES = [
           convidado_por  uuid references usuarios(id) on delete set null,
           criado_em      timestamptz not null default now(),
           ultimo_acesso  timestamptz)"""),
+    # 007 — cartão: de qual conta corrente sai o pagamento da fatura
+    ("select 1 from information_schema.columns where table_name = 'contas' and column_name = 'conta_pagamento_id'",
+     "alter table contas add column if not exists conta_pagamento_id uuid references contas(id) on delete set null"),
+    # 008 — bem: categorias cujos pagamentos viram patrimônio (ex.: parcelas da construtora)
+    ("select 1 from information_schema.columns where table_name = 'bens' and column_name = 'categorias_pagamento'",
+     "alter table bens add column if not exists categorias_pagamento uuid[]"),
+    # 009 — foto mensal do patrimônio (evolução)
+    ("select 1 from information_schema.tables where table_name = 'patrimonio_mensal'",
+     """create table if not exists patrimonio_mensal (
+          dono_id        uuid not null references usuarios(id) on delete cascade,
+          mes_ref        int not null,
+          ativos         numeric(14,2) not null,
+          passivos       numeric(14,2) not null,
+          detalhe        jsonb,
+          atualizado_em  timestamptz not null default now(),
+          primary key (dono_id, mes_ref))"""),
 ]
 
 

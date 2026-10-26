@@ -18,6 +18,7 @@ from core import db
 PERMISSOES = {
     "lancar": ("Lançar gastos", "Novo lançamento, Caixa de entrada e celular (Apple Pay / Android)", True),
     "ia": ("Usar a IA", "Lançamento rápido por foto ou texto — consome os créditos da chave do admin", False),
+    "patrimonio": ("Contas e patrimônio", "Contas correntes, cartões, investimentos e patrimônio", True),
     "importar": ("Importar", "Faturas de cartão e planilha", True),
     "contas_fixas": ("Contas fixas", "Cadastrar despesas e receitas que se repetem", True),
     "cadastros": ("Contas e categorias", "Criar e editar contas, cartões e categorias", True),

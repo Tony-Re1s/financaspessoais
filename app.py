@@ -61,8 +61,14 @@ paginas = {
         _p(None, "telas/lancamentos.py", title="Lançamentos", icon=":material/receipt_long:"),
         _p("contas_fixas", "telas/contas_fixas.py", title="Contas fixas", icon=":material/event_repeat:"),
     ],
+    "Contas e patrimônio": [
+        _p("patrimonio", "telas/contas_correntes.py", title="Contas correntes", icon=":material/account_balance_wallet:"),
+        _p("patrimonio", "telas/cartoes.py", title="Cartões de crédito", icon=":material/credit_card:"),
+        _p("patrimonio", "telas/investimentos.py", title="Investimentos", icon=":material/trending_up:"),
+        _p("patrimonio", "telas/patrimonio.py", title="Patrimônio", icon=":material/savings:"),
+    ],
     "Importar": [
-        _p("importar", "telas/importar_fatura.py", title="Fatura de cartão", icon=":material/credit_card:"),
+        _p("importar", "telas/importar_fatura.py", title="Fatura de cartão", icon=":material/receipt:"),
         _p("importar", "telas/importar.py", title="Planilha", icon=":material/upload_file:"),
     ],
     "Cadastros": [
