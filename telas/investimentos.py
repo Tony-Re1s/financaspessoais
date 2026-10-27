@@ -151,6 +151,10 @@ with st.form(f"ativo_{escolha}"):
         valor_ini = c1.number_input("Quanto tem hoje (R$)", 0.0, step=100.0, format="%.2f")
         aplicado_ini = c2.number_input("Quanto você aplicou (R$)", 0.0, step=100.0, format="%.2f",
                                        help="Para calcular o ganho. Se não souber, deixe igual ao valor de hoje.")
+    vinc = st.text_input("Pagamento mensal que alimenta esta aplicação (opcional)", _v("vinculo_descricao", "") or "",
+                         placeholder="Ex.: CAP PIC — a descrição do débito no extrato",
+                         help="Cada lançamento pago com esta descrição continua como despesa no fluxo e também "
+                              "soma no saldo desta aplicação (e no Patrimônio).")
     ativo = st.toggle("Ativa", value=bool(_v("ativo", True)))
     ok = st.form_submit_button("Salvar", type="primary")
 
@@ -164,7 +168,7 @@ if ok:
             conta_id = repo.contas(u).set_index("nome").loc[nova_inst.strip(), "id"]
         aid = inv.salvar_ativo(dict(conta_id=conta_id, nome=nome.strip(), classe=classe, indexador=indexador or None,
                                     taxa=taxa or None, data_aplicacao=data_ap, vencimento=venc, liquidez=liq,
-                                    ativo=ativo), escolha)
+                                    ativo=ativo, vinculo_descricao=vinc), escolha)
         if not escolha and (valor_ini or aplicado_ini):
             inv.movimentar(u, aid, data_ap or hoje(), "aporte", aplicado_ini or valor_ini)
             if valor_ini:

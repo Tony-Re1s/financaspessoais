@@ -7,6 +7,7 @@ from telas import _ui
 from telas._comum import cartoes_kpi, col_rs, e_celular, em_reais, seletor_escopo, usuario
 
 u = usuario()
+_ui.aviso_ok()
 topo_esq, topo_dir = st.columns([3, 1], vertical_alignment="bottom")
 with topo_esq:
     _ui.titulo("Lançamentos", "📋")
@@ -122,7 +123,7 @@ else:
            "data_vencimento": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY"),
            "descricao": "Descrição", "parcela": "Parc.", "categoria": "Categoria",
            "subcategoria": "Subcategoria", "conta": "Conta", "valor": col_rs()}
-st.caption("Toque/clique na caixinha à esquerda para selecionar e marcar como pago ou excluir.")
+st.caption("Toque/clique na caixinha à esquerda para selecionar: ✏️ editar, 🏷️ trocar a categoria (de vários de uma vez), marcar como pago ou excluir.")
 sel = st.dataframe(em_reais(vis), hide_index=True, use_container_width=True,
                    height=min(560, 35 * len(df) + 38), on_select="rerun", selection_mode="multi-row",
                    column_config=cfg)
@@ -134,7 +135,30 @@ if linhas:
     st.write(f"**{len(escolhidos)} selecionado(s)** · {brl(escolhidos['valor'].sum())}"
              + ("" if len(meus) == len(escolhidos) else " · só os seus podem ser alterados"))
     ids = list(meus["id"])
-    b1, b2, b3, _ = st.columns(4)
+    b0, b4, b1, b2, b3 = st.columns(5)
+    if b0.button("✏️ Editar", disabled=len(ids) != 1, use_container_width=True,
+                 help="Selecione um lançamento para editar tudo (descrição, valor, data, categoria, conta)"):
+        _ui.editar_lancamento(u, ids[0])
+    with b4.popover("🏷️ Categoria", disabled=not ids, use_container_width=True):
+        from core import db as _db
+        from telas._comum import opcoes_categoria
+        _cats = repo.categorias(u)
+        _tipo = meus["tipo"].iloc[0] if meus["tipo"].nunique() == 1 and meus["tipo"].iloc[0] in ("despesa", "receita") \
+            else "despesa"
+        _op = opcoes_categoria(_cats, _tipo)
+        nova_cat = st.selectbox("Nova categoria", list(_op), format_func=_op.get, index=None, placeholder="Escolha")
+        mesma_desc = st.checkbox("Aplicar também a todos os lançamentos com a mesma descrição (todos os meses)",
+                                 value=False)
+        if st.button("Aplicar", type="primary", disabled=nova_cat is None):
+            if mesma_desc:
+                n = _db.executar("""update lancamentos set categoria_id = :c, atualizado_em = now()
+                                     where dono_id = :u and (id = any(:ids) or lower(descricao) = any(:ds))""",
+                                 c=nova_cat, u=u["id"], ids=ids, ds=[d.lower() for d in meus["descricao"].dropna()])
+            else:
+                n = _db.executar("""update lancamentos set categoria_id = :c, atualizado_em = now()
+                                     where dono_id = :u and id = any(:ids)""", c=nova_cat, u=u["id"], ids=ids)
+            st.session_state["_ui_ok"] = f"Categoria trocada em {n} lançamentos."
+            st.rerun()
     if b1.button("✅ Marcar como pago", disabled=not ids, use_container_width=True):
         repo.mudar_status(u, ids, "pago"); st.rerun()
     if b2.button("⏳ Voltar para previsto", disabled=not ids, use_container_width=True):

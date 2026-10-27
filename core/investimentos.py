@@ -34,17 +34,30 @@ def ativos(u, so_ativos=True) -> pd.DataFrame:
         depois as (
           select m.ativo_id, sum(case m.tipo when 'aporte' then m.valor when 'resgate' then -m.valor else 0 end) as liq
             from ativo_movimentos m join pos p on p.ativo_id = m.ativo_id and m.data > p.data_posicao
-           group by m.ativo_id)
+           group by m.ativo_id),
+        -- pagamentos vinculados (ex.: "CAP PIC" debitado todo mês): contam como aporte depois da última posição
+        vinc as (
+          select a2.id as ativo_id, sum(l.valor) as pago
+            from ativos a2 join contas c2 on c2.id = a2.conta_id
+            left join pos p2 on p2.ativo_id = a2.id
+            join lancamentos l on l.dono_id = c2.dono_id and l.status = 'pago' and l.tipo = 'despesa'
+                              and lower(l.descricao) = lower(a2.vinculo_descricao)
+                              and coalesce(l.data_pagamento, l.data_vencimento) > coalesce(p2.data_posicao, a2.data_aplicacao,
+                                                                                          date '1900-01-01')
+           where a2.vinculo_descricao is not null and c2.dono_id = :u
+           group by a2.id)
         select a.id, a.nome, a.classe, a.indexador, a.taxa, a.data_aplicacao, a.vencimento, a.liquidez,
-               a.ativo, a.conta_id, c.nome as instituicao,
-               coalesce(mov.aplicado, 0) as aplicado, coalesce(mov.rendimentos, 0) as rendimentos,
+               a.ativo, a.conta_id, c.nome as instituicao, a.vinculo_descricao,
+               coalesce(mov.aplicado, 0) + coalesce(vinc.pago, 0) as aplicado,
+               coalesce(mov.rendimentos, 0) as rendimentos,
                pos.data_posicao, pos.valor_bruto, pos.valor_liquido,
                coalesce(pos.valor_bruto + coalesce(depois.liq, 0),
-                        coalesce(mov.aplicado, 0) + coalesce(mov.rendimentos, 0)) as valor_atual
+                        coalesce(mov.aplicado, 0) + coalesce(mov.rendimentos, 0)) + coalesce(vinc.pago, 0) as valor_atual
           from ativos a join contas c on c.id = a.conta_id
           left join mov on mov.ativo_id = a.id
           left join pos on pos.ativo_id = a.id
           left join depois on depois.ativo_id = a.id
+          left join vinc on vinc.ativo_id = a.id
          where c.dono_id = :u {"and a.ativo" if so_ativos else ""}
          order by c.nome, a.nome""", u=u["id"])
     for col in ("aplicado", "rendimentos", "valor_bruto", "valor_liquido", "valor_atual", "taxa"):
@@ -58,16 +71,18 @@ def ativos(u, so_ativos=True) -> pd.DataFrame:
 
 def salvar_ativo(d: dict, ativo_id=None):
     p = {k: d.get(k) for k in ["conta_id", "nome", "classe", "indexador", "taxa", "data_aplicacao",
-                               "vencimento", "liquidez", "cnpj_emissor", "ativo"]} | {"id": ativo_id}
+                               "vencimento", "liquidez", "cnpj_emissor", "ativo", "vinculo_descricao"]} | {"id": ativo_id}
+    p["vinculo_descricao"] = (p["vinculo_descricao"] or "").strip() or None
     if ativo_id:
         db.executar("""update ativos set conta_id=:conta_id, nome=:nome, classe=:classe, indexador=:indexador,
                          taxa=:taxa, data_aplicacao=:data_aplicacao, vencimento=:vencimento, liquidez=:liquidez,
-                         cnpj_emissor=:cnpj_emissor, ativo=coalesce(:ativo, true) where id=:id""", **p)
+                         cnpj_emissor=:cnpj_emissor, ativo=coalesce(:ativo, true),
+                         vinculo_descricao=:vinculo_descricao where id=:id""", **p)
         return ativo_id
     return db.gravar_retornando("""insert into ativos (conta_id, nome, classe, indexador, taxa, data_aplicacao, vencimento,
-                      liquidez, cnpj_emissor, ativo)
+                      liquidez, cnpj_emissor, ativo, vinculo_descricao)
                     values (:conta_id, :nome, :classe, :indexador, :taxa, :data_aplicacao, :vencimento, :liquidez,
-                      :cnpj_emissor, coalesce(:ativo, true)) returning id""", **p)["id"]
+                      :cnpj_emissor, coalesce(:ativo, true), :vinculo_descricao) returning id""", **p)["id"]
 
 
 def movimentar(u, ativo_id, data, tipo: str, valor: float, conta_corrente_id=None, descricao=None):

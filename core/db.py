@@ -126,6 +126,9 @@ _MIGRACOES = [
           detalhe        jsonb,
           atualizado_em  timestamptz not null default now(),
           primary key (dono_id, mes_ref))"""),
+    # 012 — aplicação alimentada por um pagamento mensal (ex.: PIC): o lançamento é despesa e soma no patrimônio
+    ("select 1 from information_schema.columns where table_name = 'ativos' and column_name = 'vinculo_descricao'",
+     "alter table ativos add column if not exists vinculo_descricao text"),
     # 011 — cartão de benefício (VR/VA): gasto conta nas categorias, mas não no fluxo das contas nem em fatura
     ("select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid "
      "where t.typname = 'tipo_conta' and e.enumlabel = 'beneficio'",
