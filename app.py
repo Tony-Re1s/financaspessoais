@@ -63,6 +63,7 @@ def perm_ok(chave):
 paginas = {
     "Visão geral": [
         _p(None, "telas/painel.py", title="Painel", icon=":material/dashboard:", default=True),
+        _p(None, "telas/imposto_renda.py", title="Imposto de Renda", icon=":material/receipt_long:"),
     ],
     "Movimento": [
         _p("lancar", "telas/caixa_entrada.py", title=f"Caixa de entrada{f' ({n_caixa})' if n_caixa else ''}",
