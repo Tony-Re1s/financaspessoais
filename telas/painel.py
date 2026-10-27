@@ -292,6 +292,56 @@ desp = tot[tot["tipo"] == "despesa"].copy() if not tot.empty else tot
 if not desp.empty:
     desp["valor"] = desp["valor"].astype(float)
 
+# --- detalhe da categoria clicada (mostrado no lugar dos vencimentos) ---------------------------
+_ORIG = {"migracao": "planilha", "importacao": "fatura/extrato", "applepay": "Caixa de entrada",
+         "android": "Caixa de entrada", "recorrencia": "conta fixa", "manual": "manual", "ia": "IA"}
+
+
+def _detalhe_cat(cat_sel):
+    lm = repo.lancamentos(u, escopo, sel, sel)
+    lm = lm[lm["tipo"] == "despesa"].copy() if not lm.empty else lm
+    if not lm.empty:
+        lm["categoria"] = lm["categoria"].fillna("Sem categoria")
+        lm = lm[lm["categoria"] == cat_sel].copy()
+    st.markdown(f"<div class='ui-sec'>🔎 {_ui.esc(cat_sel)} · {mes_label(sel)}</div>", unsafe_allow_html=True)
+    if lm.empty:
+        st.caption("Nada nesta categoria no mês.")
+    else:
+        lm["valor"] = lm["valor"].astype(float)
+        lm["_chave"] = lm["descricao"].fillna("").map(_ui.sem_acento).str.replace(r"[^a-z0-9]", "", regex=True) \
+            + "|" + lm["valor"].round(2).astype(str)
+        dup = lm["_chave"].duplicated(keep=False)
+        subs = lm.assign(sub=lm["subcategoria"].fillna("—")).groupby("sub")["valor"].sum().sort_values(ascending=False)
+        k1, k3 = st.columns([4, 1], vertical_alignment="center")
+        with k1:
+            _ui.render(f"<div style='font-weight:800'>{len(lm)} lançamentos · {brl(lm['valor'].sum())}</div>"
+                       f"<div style='font-size:.78rem;opacity:.7'>"
+                       + " · ".join(f"{_ui.esc(n)} {brl(v)}" for n, v in subs.items()) + "</div>")
+        if k3.button("", icon=":material/close:", key="fecha_cat", help="Fechar", use_container_width=True):
+            st.session_state["_painel_cat"] = None
+            st.rerun()
+        if dup.any():
+            st.markdown(f"<div class='ui-aviso'>⚠️ <b>{int(dup.sum())} lançamentos parecem duplicados</b> (mesma "
+                        "descrição e mesmo valor no mês) — marcados abaixo. Confira e exclua o que estiver a mais "
+                        "pelo ✏️.</div>", unsafe_allow_html=True)
+        with st.container(key="uilista_catdet"):
+            for i, r in lm.assign(_dup=dup).sort_values(["_dup", "valor"], ascending=[False, False]).iterrows():
+                d = pd.to_datetime(r["data_vencimento"]).date()
+                ic = (f"<div style='font-size:.62rem;line-height:1;text-align:center'><b style='font-size:.95rem'>"
+                      f"{d.day:02d}</b><br>{_ui.MESES[d.month - 1]}</div>")
+                parc = f"{int(r['parcela_num'])}/{int(r['parcela_total'])}" if pd.notna(r["parcela_num"]) else ""
+                sub = " · ".join(x for x in [r["subcategoria"] if isinstance(r["subcategoria"], str) else "",
+                                             r["conta"] if isinstance(r["conta"], str) else "sem conta",
+                                             _ORIG.get(r["origem"], "")] if x)
+                tag, tcls = ("duplicado?", "aj") if r["_dup"] else (parc, "")
+                acao = (lambda lid=r["id"]: _ui.editar_lancamento(u, lid)) if r["meu"] else (lambda: None)
+                _ui.linha_editavel(f"cd{i}", _ui.item_html(ic, r["descricao"], sub, tag, tcls, r["status"] == "previsto"),
+                                   _ui.valor_html(-float(r["valor"]), r["status"] == "previsto"), acao)
+        st.caption("Embaixo de cada item: subcategoria · conta · de onde veio (planilha, fatura/extrato, Caixa de "
+                   "entrada, conta fixa ou manual).")
+
+
+
 esq, dir_ = (st.container(), st.container()) if cel else st.columns(2)
 with esq:
     st.markdown(f"<div class='ui-sec'>Gastos de {mes_label(sel)} por categoria</div>", unsafe_allow_html=True)
@@ -304,44 +354,60 @@ with esq:
         total_cat = float(cat["valor"].sum()) or 1.0
         linhas = [f"<div class='ui-cat'><div class='t'><span>Total do mês</span><span class='v'>{brl(total_cat)}</span>"
                   f"</div><div class='p'>pago {brl(pago)} · a pagar {brl(aberto)}</div></div>"]
-        for r in cat.itertuples():
-            pct = float(r.valor) / total_cat
-            linhas.append(f"""<div class="ui-cat"><div class="t"><span>{_ui.esc(r.categoria or 'Sem categoria')}</span>
-                <span class="v">{brl(r.valor)}</span></div>
-                <div class="barra"><div style="width:{pct * 100:.0f}%"></div></div>
-                <div class="p">{pct:.0%} do mês</div></div>""")
-        _ui.render(f"<div class='ui-lista-html'>{''.join(linhas)}</div>")
+        _ui.render(f"<div class='ui-lista-html' style='margin-bottom:6px'>{linhas[0]}</div>")
+        st.caption("Toque numa categoria para ver e editar o que entrou nela.")
+        cat_sel = st.session_state.get("_painel_cat")
+        with st.container(key="uilista_cats"):
+            for i, r in enumerate(cat.itertuples()):
+                pct = float(r.valor) / total_cat
+                nome_c = r.categoria or "Sem categoria"
+                marcado = cat_sel == nome_c
+                with st.container(key=f"uirow_cat{i}"):
+                    a1, a2 = st.columns([6, 0.6], vertical_alignment="center")
+                    a1.markdown(f"""<div class="ui-cat" style="border:none;padding:4px 0">
+                        <div class="t"><span>{'👉 ' if marcado else ''}{_ui.esc(nome_c)}</span>
+                        <span class="v">{brl(r.valor)}</span></div>
+                        <div class="barra"><div style="width:{pct * 100:.0f}%"></div></div>
+                        <div class="p">{pct:.0%} do mês</div></div>""".replace("\n", ""), unsafe_allow_html=True)
+                    if a2.button("", key=f"vercat_{i}", icon=":material/close:" if marcado else ":material/search:",
+                                 help="Fechar" if marcado else f"Ver lançamentos de {nome_c}"):
+                        st.session_state["_painel_cat"] = None if marcado else nome_c
+                        st.rerun()
 
 with dir_:
-    if sel == atual:
-        titulo_v, de, ate = "Vencendo nos próximos 15 dias", hj, hj + timedelta(days=15)
-    elif sel > atual:
-        titulo_v, de, ate = f"A pagar em {mes_label(sel)}", _ini(sel), _fim(sel)
+    _cat_sel = st.session_state.get("_painel_cat") if not desp.empty else None
+    if _cat_sel:
+        _detalhe_cat(_cat_sel)
     else:
-        titulo_v, de, ate = f"Ficou em aberto em {mes_label(sel)}", _ini(sel), _fim(sel)
-    st.markdown(f"<div class='ui-sec'>{titulo_v}</div>", unsafe_allow_html=True)
-    lanc = repo.lancamentos(u, escopo, mes_ref(de), mes_ref(ate))
-    janela = pd.DataFrame()
-    if not lanc.empty:
-        lanc["data_vencimento"] = pd.to_datetime(lanc["data_vencimento"]).dt.date
-        janela = lanc[(lanc["status"] == "previsto") & (lanc["tipo"] == "despesa")
-                      & (lanc["data_vencimento"] >= de) & (lanc["data_vencimento"] <= ate)]
-    if janela.empty:
-        st.caption("Nada em aberto aqui. 🎉")
-    else:
-        mostrar = janela.sort_values(["data_vencimento", "valor"], ascending=[True, False]).head(25)
-        with st.container(key="uilista_venc"):
-            for r in mostrar.itertuples():
-                d = r.data_vencimento
-                ic = (f"<div style='font-size:.62rem;line-height:1;text-align:center'><b style='font-size:.95rem'>"
-                      f"{d.day:02d}</b><br>{_ui.MESES[d.month - 1]}</div>")
-                sub = " · ".join(x for x in [r.conta if isinstance(r.conta, str) else "",
-                                             r.categoria if isinstance(r.categoria, str) else ""] if x)
-                acao = (lambda i=r.id: _ui.editar_lancamento(u, i)) if r.meu else (lambda: None)
-                _ui.linha_editavel(f"pv{r.Index}", _ui.item_html(ic, r.descricao, sub),
-                                   _ui.valor_html(-float(r.valor)), acao)
-        extra = f" · mostrando 25 de {len(janela)}" if len(janela) > 25 else ""
-        st.caption(f"Total: **{brl(janela['valor'].astype(float).sum())}**{extra}")
+        if sel == atual:
+            titulo_v, de, ate = "Vencendo nos próximos 15 dias", hj, hj + timedelta(days=15)
+        elif sel > atual:
+            titulo_v, de, ate = f"A pagar em {mes_label(sel)}", _ini(sel), _fim(sel)
+        else:
+            titulo_v, de, ate = f"Ficou em aberto em {mes_label(sel)}", _ini(sel), _fim(sel)
+        st.markdown(f"<div class='ui-sec'>{titulo_v}</div>", unsafe_allow_html=True)
+        lanc = repo.lancamentos(u, escopo, mes_ref(de), mes_ref(ate))
+        janela = pd.DataFrame()
+        if not lanc.empty:
+            lanc["data_vencimento"] = pd.to_datetime(lanc["data_vencimento"]).dt.date
+            janela = lanc[(lanc["status"] == "previsto") & (lanc["tipo"] == "despesa")
+                          & (lanc["data_vencimento"] >= de) & (lanc["data_vencimento"] <= ate)]
+        if janela.empty:
+            st.caption("Nada em aberto aqui. 🎉")
+        else:
+            mostrar = janela.sort_values(["data_vencimento", "valor"], ascending=[True, False]).head(25)
+            with st.container(key="uilista_venc"):
+                for r in mostrar.itertuples():
+                    d = r.data_vencimento
+                    ic = (f"<div style='font-size:.62rem;line-height:1;text-align:center'><b style='font-size:.95rem'>"
+                          f"{d.day:02d}</b><br>{_ui.MESES[d.month - 1]}</div>")
+                    sub = " · ".join(x for x in [r.conta if isinstance(r.conta, str) else "",
+                                                 r.categoria if isinstance(r.categoria, str) else ""] if x)
+                    acao = (lambda i=r.id: _ui.editar_lancamento(u, i)) if r.meu else (lambda: None)
+                    _ui.linha_editavel(f"pv{r.Index}", _ui.item_html(ic, r.descricao, sub),
+                                       _ui.valor_html(-float(r.valor)), acao)
+            extra = f" · mostrando 25 de {len(janela)}" if len(janela) > 25 else ""
+            st.caption(f"Total: **{brl(janela['valor'].astype(float).sum())}**{extra}")
 
 if escopo == "nos" and not desp.empty:
     outros = desp[~desp["meu"]]

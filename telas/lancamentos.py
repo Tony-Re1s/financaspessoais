@@ -39,21 +39,54 @@ _tipos = dict(zip(repo.contas(u, so_ativas=False)["nome"], repo.contas(u, so_ati
 _MEIO = {"cartao_credito": "💳 Cartão de crédito", "beneficio": "🍽️ VR/VA"}
 df["meio"] = df["conta"].map(lambda c: "📄 Sem conta (boleto/pix)" if not isinstance(c, str)
                               else _MEIO.get(_tipos.get(c), "🏦 Conta corrente"))
-with st.expander("Meio de pagamento, conta e categoria"):
-    f_meio = st.segmented_control("Meio", sorted(df["meio"].unique()), selection_mode="multi", key="f_meio",
-                                  label_visibility="collapsed")
-    g1, g2 = st.columns(2)
-    f_contas = g1.multiselect("Conta / cartão", sorted(df["conta"].dropna().unique()))
-    f_cats = g2.multiselect("Categoria", sorted(df["categoria"].dropna().unique()))
+ORIGENS = {"migracao": "📊 Planilha", "importacao": "📥 Fatura/extrato", "applepay": "📱 Caixa de entrada",
+           "android": "📱 Caixa de entrada", "recorrencia": "🔁 Contas fixas", "manual": "✍️ Manual", "ia": "🤖 IA"}
+df["origem_n"] = df["origem"].map(lambda o: ORIGENS.get(o, "Outro"))
+df["categoria"] = df["categoria"].fillna("Sem categoria")
+df["parc_tipo"] = df["parcela_num"].map(lambda p: "Parcelado" if pd.notna(p) else "À vista")
+df["tipo_n"] = df["tipo"].map({"despesa": "↓ Despesas", "receita": "↑ Receitas", "transferencia": "🔁 Transferências"})
+
+with st.container(border=True, key="filtros_lanc"):
+    st.markdown("**Filtros**")
+    q1, q2 = st.columns(2) if not cel else (st.container(), st.container())
+    f_tipo = q1.pills("Tipo", sorted(df["tipo_n"].dropna().unique()), selection_mode="multi", key="f_tipo")
+    f_meio = q2.pills("Meio de pagamento", sorted(df["meio"].unique()), selection_mode="multi", key="f_meio")
+    g1, g2, g3 = st.columns(3) if not cel else (st.container(), st.container(), st.container())
+    f_contas = g1.multiselect("Conta / cartão", sorted(df["conta"].dropna().unique()), placeholder="todas")
+    f_cats = g2.multiselect("Categoria", sorted(df["categoria"].unique()), placeholder="todas")
+    subs_disp = sorted(df[df["categoria"].isin(f_cats)]["subcategoria"].dropna().unique()) if f_cats else \
+        sorted(df["subcategoria"].dropna().unique())
+    f_subs = g3.multiselect("Subcategoria", subs_disp, placeholder="todas")
+    h1, h2, h3 = st.columns([1.2, 1.2, 1.6]) if not cel else (st.container(), st.container(), st.container())
+    f_parc = h1.pills("Parcelas", ["À vista", "Parcelado"], selection_mode="multi", key="f_parc")
+    f_orig = h2.multiselect("Origem", sorted(df["origem_n"].unique()), placeholder="todas")
+    vmax = float(df["valor"].astype(float).max() or 0)
+    f_val = h3.slider("Valor (R$)", 0.0, max(vmax, 1.0), (0.0, max(vmax, 1.0)), step=10.0, key="f_val",
+                      format="R$ %.0f")
+    f_dup = st.toggle("Só possíveis duplicados (mesma descrição e valor no mesmo mês)", key="f_dup")
+
+if f_tipo:
+    df = df[df["tipo_n"].isin(f_tipo)]
 if f_meio:
     df = df[df["meio"].isin(f_meio)]
-
 if status_f != "todos":
     df = df[df["status"] == status_f]
 if f_contas:
     df = df[df["conta"].isin(f_contas)]
 if f_cats:
     df = df[df["categoria"].isin(f_cats)]
+if f_subs:
+    df = df[df["subcategoria"].isin(f_subs)]
+if f_parc:
+    df = df[df["parc_tipo"].isin(f_parc)]
+if f_orig:
+    df = df[df["origem_n"].isin(f_orig)]
+if f_val and (f_val[0] > 0 or f_val[1] < vmax):
+    df = df[(df["valor"].astype(float) >= f_val[0]) & (df["valor"].astype(float) <= f_val[1])]
+if f_dup:
+    _k = df["mes_ref"].astype(str) + "|" + df["descricao"].fillna("").map(_ui.sem_acento).str.replace(
+        r"[^a-z0-9]", "", regex=True) + "|" + df["valor"].astype(float).round(2).astype(str)
+    df = df[_k.duplicated(keep=False)]
 if busca:
     alvo = (df["descricao"].fillna("") + " " + df["categoria"].fillna("") + " " +
             df["subcategoria"].fillna("") + " " + df["conta"].fillna("")).str.lower()
