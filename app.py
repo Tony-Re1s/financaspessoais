@@ -76,6 +76,7 @@ paginas = {
     "Contas e patrimônio": [
         _p("patrimonio", "telas/contas_correntes.py", title="Contas correntes", icon=":material/account_balance_wallet:"),
         _p("patrimonio", "telas/cartoes.py", title="Cartões de crédito", icon=":material/credit_card:"),
+        _p("patrimonio", "telas/beneficios.py", title="Benefícios (VR/VA)", icon=":material/restaurant:"),
         _p("patrimonio", "telas/investimentos.py", title="Investimentos", icon=":material/trending_up:"),
         _p("patrimonio", "telas/patrimonio.py", title="Patrimônio", icon=":material/savings:"),
     ],

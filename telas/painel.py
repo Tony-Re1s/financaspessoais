@@ -182,6 +182,16 @@ for r in caixa.itertuples():
                  f"<div class='s'>{brl(sh)}</div>"
                  f"<div class='n' style='font-size:.7rem'>{'hoje' if sel == atual else ('em ' + f'{_fim(sel):%d/%m}')}"
                  f"</div></div></div>")
+try:
+    from core import beneficios as _bn
+    for b in _bn.contas(u).itertuples():
+        sb = saldos.saldo_em(u, b.id, hj if sel == atual else _fim(sel))
+        cards.append(f"<div class='ui-card'><div class='ui-selo ui-selo-txt' style='width:38px;height:38px;"
+                     f"background:linear-gradient(135deg,#9A3412,#EA580C)'>🍽️</div>"
+                     f"<div style='min-width:0'><div class='n'>{_ui.esc(b.nome)}</div><div class='s'>{brl(sb)}</div>"
+                     f"<div class='n' style='font-size:.7rem'>benefício · fora do fluxo</div></div></div>")
+except Exception:  # noqa: BLE001
+    pass
 fat = cartoes.faturas(u)
 if not fat.empty:
     info = contas.set_index("id")

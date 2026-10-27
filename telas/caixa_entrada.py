@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 
+from core import beneficios as bn
 from core import caixa, ia, repo
 from core.fmt import FUSO, brl, hoje, vencimento_fatura
 from telas import _ui
@@ -90,7 +91,8 @@ else:
             ligada = caixa.conta_do_cartao(u, item.cartao)
             cartao_sug = ligada if ligada in op_cartoes else None
             banco_sug = ligada if ligada in op_bancos else None
-            benef_sug = ligada if ligada in op_benef else (next(iter(op_benef)) if len(op_benef) == 1 else None)
+            benef_sug = ligada if ligada in op_benef else next(
+                (i for i, n in op_benef.items() if not bn.fora_dos_gastos(u, i)), next(iter(op_benef), None))
             if cartao_sug is not None:
                 banco_sug = _debito_do_cartao(cartao_sug)
             funcao_sug = ("beneficio" if ligada in op_benef else
@@ -114,9 +116,8 @@ else:
                                         placeholder="Categoria")
             if beneficio and not op_benef:
                 c2.caption("Você ainda não tem o cartão VR/VA cadastrado.")
-                if c2.button("Criar cartão VR/VA", key=f"cria_vr_{k}", icon=":material/add_card:"):
-                    repo.salvar_conta(u, dict(nome="VR/VA", tipo="beneficio", instituicao=None, visibilidade="privado",
-                                              ativa=True))
+                if c2.button("Criar VR e VA", key=f"cria_vr_{k}", icon=":material/add_card:"):
+                    bn.criar_padrao(u)
                     st.rerun()
                 conta_id = None
             else:
@@ -125,6 +126,10 @@ else:
                 ids = list(ops)
                 conta_id = c2.selectbox(rot, ids, format_func=ops.get,
                                         key=f"conta_{k}_{funcao}", index=ids.index(sug) if sug in ids else 0)
+            fora = beneficio and conta_id is not None and bn.fora_dos_gastos(u, conta_id)
+            if fora:
+                st.caption("🛒 Este benefício está **fora dos seus gastos**: a compra só baixa o saldo dele "
+                           "(categoria não precisa).")
 
             with st.expander("Ajustar"):
                 descricao = st.text_input("Descrição", item.estabelecimento or "", key=f"desc_{k}")
@@ -135,11 +140,18 @@ else:
                                            help="Débito e VR/VA são sempre à vista" if debito or beneficio else None)
 
             b1, b2 = st.columns([2, 1])
-            pode = bool(categoria_id) and bool(conta_id) and valor_ed > 0
+            pode = (bool(categoria_id) or fora) and bool(conta_id) and valor_ed > 0
             if b1.button("Lançar", key=f"ok_{k}", type="primary", icon=":material/check:",
                          disabled=not pode, use_container_width=True,
                          help=None if pode else "Escolha categoria e conta"):
                 compra = quando.date()
+                if fora:
+                    lid = bn.registrar_uso(u, conta_id, descricao.strip() or "Compra no benefício", valor_ed,
+                                           compra, fora=True)
+                    caixa.marcar(u, item.id, "lancado", lid)
+                    st.session_state["_ok_caixa"] = f"Uso registrado no {op_benef.get(conta_id, 'benefício')}: " \
+                                                    f"{descricao} · {brl(valor_ed)}"
+                    st.rerun()
                 conta = contas[contas["id"] == conta_id].iloc[0]
                 if beneficio:
                     venc, forma, status, n_parc = compra, "Beneficio (VR/VA)", "pago", 1
@@ -157,7 +169,7 @@ else:
                 linhas = repo.plano_parcelas(dados, 1, n_parc, valor_e_total=True)
                 caixa.lancar(u, item.id, linhas)
                 if item.cartao and beneficio:
-                    caixa.lembrar_cartao(u, item.cartao, conta_id)   # este cartão da Carteira é o VR/VA
+                    caixa.lembrar_cartao(u, item.cartao, conta_id)   # este cartão da Carteira é o VR (nos gastos)
                 elif item.cartao:   # sempre aprende: próxima compra deste cartão já vem preenchida
                     if debito and cartao_sug is not None:
                         caixa.ligar_debito(u, cartao_sug, conta_id)
