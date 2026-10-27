@@ -178,8 +178,31 @@ with st.container(border=True):
     com13 = st.checkbox(f"Prever também o 13º: 1ª parcela {brl(e13['p1'])} em 30/11 e 2ª parcela "
                         f"{brl(e13['p2'])} em 18/12 (estimativa, já sem INSS e IR)".replace("$", "\\$"), value=True)
     nomes = ["salário · adiantamento", "salário · 2ª parte"]
+    from core import db as _db
+    tem13 = _db.consultar("""select descricao, valor, data_vencimento from lancamentos
+                              where dono_id = :u and descricao ilike '13%% sal%%' and extract(year from data_vencimento) = :a
+                              order by data_vencimento""", u=u["id"], a=hoje().year)
+    if not tem13.empty:
+        st.caption("✅ 13º na previsão: " + " · ".join(f"{x.descricao} {brl(x.valor)} em {x.data_vencimento:%d/%m}"
+                                                       for x in tem13.itertuples()))
     if any(n in ja for n in nomes):
         st.caption("✅ O salário já está nas Contas fixas — para mudar valor ou dia, use a tela **Contas fixas**.")
+        if tem13.empty and st.button("Colocar o 13º na previsão", type="primary", icon=":material/savings:",
+                                     disabled=not conta):
+            cats = repo.categorias(u, "receita")
+            cat13 = next((c.id for c in cats.itertuples() if "13" in c.nome),
+                         next((c.id for c in cats.itertuples() if _ui.sem_acento(c.nome) == "salario"), None))
+            repo.inserir_lancamentos(u, [
+                dict(conta_id=conta, categoria_id=cat13, tipo="receita", descricao="13º salário · 1ª parcela",
+                     valor=e13["p1"], data_compra=date(hoje().year, 11, 30), data_vencimento=date(hoje().year, 11, 30),
+                     status="previsto", forma_pagamento="Transferencia", origem="manual",
+                     observacao="Estimativa (Imposto de Renda)"),
+                dict(conta_id=conta, categoria_id=cat13, tipo="receita", descricao="13º salário · 2ª parcela",
+                     valor=e13["p2"], data_compra=date(hoje().year, 12, 18), data_vencimento=date(hoje().year, 12, 18),
+                     status="previsto", forma_pagamento="Transferencia", origem="manual",
+                     observacao="Estimativa (Imposto de Renda)")])
+            st.session_state["_ui_ok"] = "13º na previsão de caixa (novembro e dezembro)."
+            st.rerun()
     elif st.button("Colocar o salário nas Contas fixas", type="primary", icon=":material/event_repeat:",
                    disabled=not conta):
         cats = repo.categorias(u, "receita")
@@ -192,7 +215,7 @@ with st.container(border=True):
                                frequencia="mensal", dia_vencimento=int(dia),
                                inicio=inicio if hoje().day < dia else prox, fim=None, visibilidade=None,
                                ativa=True, forma_pagamento="Transferencia"))
-        if com13:
+        if com13 and tem13.empty:
             cat13 = next((c.id for c in cats.itertuples() if "13" in c.nome), cat)
             repo.inserir_lancamentos(u, [
                 dict(conta_id=conta, categoria_id=cat13, tipo="receita", descricao="13º salário · 1ª parcela",
