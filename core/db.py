@@ -17,6 +17,19 @@ def _conn():
     return st.connection("neon", type="sql", pool_pre_ping=True, pool_recycle=240)
 
 
+# ---------------------------------------------------------------------------------------------
+# Leituras guardadas em memória: cada clique refaz a tela inteira, e o Neon fica longe do servidor
+# do app — dezenas de consultas por tela viravam 20-30 s. Qualquer gravação feita pelo app muda a
+# "versão" e apaga o que estava guardado; o que muda por fora (Atalho do iPhone, console) vence em 2 min.
+# ---------------------------------------------------------------------------------------------
+_VERSAO = {"n": 0}
+SEM_CACHE = ("caixa_entrada",)          # chega pelo celular a qualquer momento
+
+
+def _mudou():
+    _VERSAO["n"] += 1
+
+
 @contextmanager
 def transacao():
     """Bloco com commit no fim (ou rollback se der erro)."""
@@ -24,21 +37,44 @@ def transacao():
         try:
             yield s
             s.commit()
+            _mudou()
         except Exception:
             s.rollback()
             raise
 
 
-def consultar(sql: str, **params) -> pd.DataFrame:
+def _ler(sql: str, params: dict):
     with _conn().session as s:
         res = s.execute(text(sql), params)
-        return pd.DataFrame(res.mappings().all(), columns=list(res.keys()))
+        return list(res.keys()), [tuple(r) for r in res.all()]
+
+
+@st.cache_data(ttl=120, max_entries=3000, show_spinner=False)
+def _ler_cache(sql: str, params: dict, versao: int):
+    return _ler(sql, params)
+
+
+def _buscar(sql: str, params: dict):
+    if any(t in sql for t in SEM_CACHE) or "returning" in sql.lower():
+        return _ler(sql, params)
+    try:
+        return _ler_cache(sql, params, _VERSAO["n"])
+    except Exception:  # noqa: BLE001 — parâmetro que não dá para guardar: lê direto
+        return _ler(sql, params)
+
+
+def limpar_cache():
+    _mudou()
+
+
+def consultar(sql: str, **params) -> pd.DataFrame:
+    cols, linhas = _buscar(sql, params)
+    return pd.DataFrame(linhas, columns=cols)
 
 
 def um(sql: str, **params) -> dict | None:
-    with _conn().session as s:
-        row = s.execute(text(sql), params).mappings().first()
-        return dict(row) if row else None
+    cols, linhas = _buscar(sql, params)
+    return dict(zip(cols, linhas[0])) if linhas else None
 
 
 def gravar_retornando(sql: str, **params) -> dict | None:
