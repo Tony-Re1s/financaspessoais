@@ -63,6 +63,8 @@ def perm_ok(chave):
 paginas = {
     "Visão geral": [
         _p(None, "telas/painel.py", title="Painel", icon=":material/dashboard:", default=True),
+        _p(None, "telas/orcamentos.py", title="Orçamentos", icon=":material/track_changes:"),
+        _p(None, "telas/assistente.py", title="Assistente IA", icon=":material/auto_awesome:"),
         _p(None, "telas/imposto_renda.py", title="Imposto de Renda", icon=":material/receipt_long:"),
     ],
     "Movimento": [

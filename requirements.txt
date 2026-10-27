@@ -9,4 +9,4 @@ altair>=5
 pillow-heif>=0.18
 xlrd>=2.0
 pdfplumber>=0.11
-# 2026-10-27c: força o reinício do app (migração 012 e investimentos)
+# 2026-10-27d: força o reinício do app (deduções IR, orçamentos, assistente)

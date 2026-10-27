@@ -7,6 +7,8 @@ from core.padroes import FORMAS_PAGAMENTO, TIPOS_CONTA, VISIBILIDADES
 from telas import _ui
 from telas._comum import col_rs, em_reais, opcoes_categoria, usuario
 
+from core import deducoes as _dd
+
 u = usuario()
 _ui.titulo("Novo lançamento", "➕")
 
@@ -95,7 +97,7 @@ if st.button("Salvar", type="primary", icon=":material/save:", disabled=bool(fal
              use_container_width=True, help=f"Falta: {', '.join(faltando)}" if faltando else None):
     n = repo.inserir_lancamentos(u, linhas)
     st.session_state["_ok_lanc"] = (f"{n} parcelas lançadas." if n > 1 else "Lançamento salvo.") + \
-        f" {descricao} · {brl(sum(l['valor'] for l in linhas))}"
+        f" {descricao} · {brl(sum(l['valor'] for l in linhas))}" + _dd.aviso_lancamento(descricao, categoria_id)
     for k in ("f_desc", "f_valor", "f_ptot", "f_pini", "f_obs", "f_cat"):
         st.session_state.pop(k, None)
     st.rerun()

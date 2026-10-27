@@ -3,10 +3,11 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
-from core import ir, repo, saldos
+from core import deducoes as dd
+from core import ia, ir, repo, saldos
 from core import recorrencias as rec
 from core.fmt import brl, hoje
-from telas import _ui
+from telas import _deducoes, _ui
 from telas._comum import cartoes_kpi, e_celular, usuario
 
 u = usuario()
@@ -53,7 +54,11 @@ dep = c3.number_input("Dependentes", 0, 10, 0, help="Filhos, cônjuge sem renda�
 
 hol = ir.holerites(u, ano)
 pm = ir.por_mes(hol)
-r = ir.resumo(pm, projetar=projetar, dependentes=dep)
+ded = dd.resumo(u, ano, incluir_sugestoes=st.session_state.get("ir_inc_sug", True))
+r = ir.resumo(pm, projetar=projetar, dependentes=dep, outras_deducoes=ded["total"])
+r_sem = ir.resumo(pm, projetar=projetar, dependentes=dep)
+economia = max(0.0, min(r_sem["simplificada"]["devido"], r_sem["completa"]["devido"])
+               - min(r["simplificada"]["devido"], r["completa"]["devido"]))
 melhor = r[r["melhor"]]
 saldo = melhor["saldo"]
 restitui = saldo < 0
@@ -73,7 +78,7 @@ if r["reducao_possivel"]:
 st.markdown("<div class='ui-sec'>Simplificada ou completa?</div>", unsafe_allow_html=True)
 cards = []
 for k, nome, expl in [("simplificada", "Simplificada", f"20% dos tributáveis, até {brl(ir.LIMITE_SIMPLIFICADO)}"),
-                      ("completa", "Completa", "INSS + saúde + previdência privada + dependentes")]:
+                      ("completa", "Completa", "INSS + saúde + educação + previdência privada + dependentes")]:
     d = r[k]
     s = d["saldo"]
     sel = " style='outline:3px solid #0F766E;outline-offset:2px'" if r["melhor"] == k else ""
@@ -83,6 +88,9 @@ for k, nome, expl in [("simplificada", "Simplificada", f"20% dos tributáveis, a
         <div class="n" style="font-size:.74rem">Deduções {brl(d['deducoes'])} · base {brl(d['base'])} ·
         imposto {brl(d['devido'])}</div><div class="n" style="font-size:.7rem">{expl}</div></div></div>""")
 _ui.render(f"<div class='ui-grade' style='grid-template-columns:repeat(auto-fill,minmax(260px,1fr))'>{''.join(cards)}</div>")
+
+# --- deduções ---
+_deducoes.secao(u, ano, ded, economia, cel, r)
 
 # --- mês a mês -------------------------------------------------------------------------------------
 st.markdown("<div class='ui-sec'>Mês a mês</div>", unsafe_allow_html=True)
@@ -140,9 +148,16 @@ html += ficha("Rendimentos isentos e não tributáveis", "🟢", [
     ("Abono pecuniário de férias + 1/3", brl(r["isento"])),
     ("FGTS depositado no ano (não declara)", brl(r["fgts"])),
 ])
-html += ficha("Pagamentos efetuados (dedução na completa)", "🩺", [
-    ("Plano de saúde / coparticipação (operadora: ver informe)", brl(r["saude"])),
-])
+_pag = [("Plano de saúde / coparticipação descontado no holerite (ver informe)", brl(r["saude"]))]
+_conf = ded["confirmadas"]
+if not _conf.empty:
+    _g = _conf.assign(documento=_conf["documento"].fillna("CPF/CNPJ?")).groupby(
+        ["tipo", "prestador", "documento", "beneficiario"], dropna=False)["valor"].sum().reset_index()
+    _pag += [(f"{'🩺' if x.tipo == 'saude' else '🎓'} {x.prestador or '—'} · {x.documento}"
+              + (f" · {x.beneficiario}" if x.beneficiario != "Titular" else ""), brl(x.valor)) for x in _g.itertuples()]
+if ded["educacao_pago"] > ded["educacao"]:
+    _pag.append(("Educação acima do limite (não deduz)", brl(ded["educacao_pago"] - ded["educacao"])))
+html += ficha("Pagamentos efetuados (dedução na completa)", "🩺", _pag)
 if cel:
     _ui.render(html)
 else:

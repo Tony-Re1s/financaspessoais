@@ -7,6 +7,8 @@ from core.fmt import FUSO, brl, hoje, vencimento_fatura
 from telas import _ui
 from telas._comum import cartoes_kpi, opcoes_categoria, usuario
 
+from core import deducoes as _dd
+
 u = usuario()
 _ui.titulo("Caixa de entrada", "📥")
 st.caption("Compras que chegaram sozinhas (Apple Pay no iPhone, notificações no Android). Confira crédito, débito ou VR/VA, a categoria e o cartão e toque em **Lançar**.")
@@ -178,7 +180,8 @@ else:
                         if not debito and banco_sug is not None and cartao_sug is None:
                             caixa.ligar_debito(u, conta_id, banco_sug)   # era só débito; agora é o mesmo cartão
                 quando_txt = "no VR/VA" if beneficio else ("pago hoje" if debito else f"vence {venc:%d/%m}")
-                st.session_state["_ok_caixa"] = f"Lançado: {descricao} · {brl(valor_ed)} · {quando_txt}"
+                st.session_state["_ok_caixa"] = f"Lançado: {descricao} · {brl(valor_ed)} · {quando_txt}" \
+                    + _dd.aviso_lancamento(descricao, categoria_id)
                 st.rerun()
             if b2.button("Ignorar", key=f"ig_{k}", use_container_width=True):
                 caixa.marcar(u, item.id, "ignorado")

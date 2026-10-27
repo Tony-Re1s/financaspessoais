@@ -165,3 +165,56 @@ def categorizar(itens: list[tuple[str, float]], categorias: dict) -> list:
         except (TypeError, ValueError, KeyError):
             pass
     return out
+
+
+FERRAMENTA_IR = {
+    "name": "registrar_comprovante",
+    "description": "Dados do recibo/nota fiscal para a declaração de IR.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "tipo": {"type": "string", "enum": ["saude", "educacao", "outro"]},
+            "prestador": {"type": "string", "description": "Nome/razão social de quem prestou o serviço"},
+            "documento": {"type": "string", "description": "CNPJ ou CPF do prestador, só números e pontuação"},
+            "beneficiario": {"type": "string", "description": "Paciente/aluno, se aparecer; vazio se não"},
+            "data": {"type": "string", "description": "Data do pagamento/emissão AAAA-MM-DD"},
+            "valor_pago": {"type": "number", "description": "Valor total do documento"},
+            "valor_dedutivel": {"type": "number", "description": "Parte dedutível: em educação só a mensalidade "
+                                "(sem material, uniforme, multa, taxa avulsa); em saúde o total menos reembolsos"},
+            "descricao": {"type": "string", "description": "Serviço, curto"},
+            "duvida": {"type": "string", "description": "O que não ficou claro (vazio se nada)"},
+        },
+        "required": ["tipo", "prestador", "valor_pago", "valor_dedutivel", "data"],
+    },
+}
+
+
+def ler_comprovante_ir(dados: bytes, nome: str, hoje: date) -> dict:
+    """Lê recibo/nota (PDF ou foto) e devolve prestador, CNPJ, valores e o que é dedutível."""
+    k = chave()
+    if not k:
+        raise RuntimeError("Falta a chave da Anthropic nos Secrets ([anthropic] api_key).")
+    if nome.lower().endswith(".pdf"):
+        bloco = {"type": "document", "source": {"type": "base64", "media_type": "application/pdf",
+                                                "data": base64.b64encode(dados).decode()}}
+    else:
+        bloco = {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                             "data": base64.b64encode(preparar_imagem(dados)).decode()}}
+    r = httpx.post(URL, timeout=90, headers={"x-api-key": k, "anthropic-version": "2023-06-01",
+                                             "content-type": "application/json"},
+                   json={"model": modelo(), "max_tokens": 800,
+                         "system": "Você lê recibos e notas fiscais brasileiros para a declaração de IR (pessoa "
+                                   "física). Siga as regras da Receita: saúde sem limite (médico, dentista, psicólogo, "
+                                   "fisioterapeuta, fonoaudiólogo, terapeuta ocupacional, hospital, exames, plano); "
+                                   "educação só escola, graduação, pós e técnico. Chame registrar_comprovante.",
+                         "tools": [FERRAMENTA_IR], "tool_choice": {"type": "tool", "name": FERRAMENTA_IR["name"]},
+                         "messages": [{"role": "user", "content": [
+                             bloco, {"type": "text", "text": f"Hoje é {hoje:%Y-%m-%d}. Extraia os dados."}]}]})
+    if r.status_code >= 400:
+        raise RuntimeError(f"A IA respondeu erro {r.status_code}: {r.text[:200]}")
+    d = dict(next(b for b in r.json()["content"] if b.get("type") == "tool_use")["input"])
+    try:
+        d["data"] = date.fromisoformat(str(d.get("data"))[:10])
+    except ValueError:
+        d["data"] = hoje
+    return d

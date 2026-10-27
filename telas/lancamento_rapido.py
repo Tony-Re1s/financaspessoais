@@ -8,6 +8,8 @@ from core.fmt import brl, hoje, vencimento_fatura
 from telas import _ui
 from telas._comum import opcoes_categoria, usuario
 
+from core import deducoes as _dd
+
 u = usuario()
 _ui.titulo("Lançamento rápido", "⚡")
 st.caption("Tire foto do comprovante ou escreva do seu jeito (“mercado 45 nubank débito”). "
@@ -138,7 +140,8 @@ if b1.button("Salvar", type="primary", icon=":material/save:", use_container_wid
     for k in ["rap_res", "rap_img", "rap_foto", "rap_obs", "rap_txt"] + [k for k in st.session_state
                                                                          if str(k).startswith("rc_")]:
         st.session_state.pop(k, None)
-    st.session_state["_ok_rapido"] = f"Lançado: {descricao} · {brl(valor)}"
+    st.session_state["_ok_rapido"] = f"Lançado: {descricao} · {brl(valor)}" \
+        + (_dd.aviso_lancamento(descricao, categoria_id) if tipo == "despesa" else "")
     st.rerun()
 if b2.button("Descartar", use_container_width=True):
     st.session_state.pop("rap_res", None)
