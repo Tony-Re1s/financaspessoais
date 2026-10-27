@@ -44,7 +44,7 @@ with topo[1]:
 
 for m in st.session_state["_ia_chat"]:
     with st.chat_message(m["role"], avatar="✨" if m["role"] == "assistant" else "🙂"):
-        st.markdown(m["texto"])
+        st.markdown(m["texto"].replace("$", "\\$"))
         if m.get("fontes"):
             st.caption("Consultou: " + ", ".join(m["fontes"]))
 
@@ -60,7 +60,7 @@ st.session_state["_ia_ultima_pronta"] = escolha
 if pergunta:
     st.session_state["_ia_chat"].append({"role": "user", "texto": pergunta})
     with st.chat_message("user", avatar="🙂"):
-        st.markdown(pergunta)
+        st.markdown(pergunta.replace("$", "\\$"))
     hist = st.session_state["_ia_hist"] + [{"role": "user", "content": pergunta}]
     usadas = []
     with st.chat_message("assistant", avatar="✨"):
@@ -76,7 +76,7 @@ if pergunta:
             except Exception as e:  # noqa: BLE001
                 stt.update(label="Não consegui responder", state="error")
                 texto, hist = f"⚠️ {e}", st.session_state["_ia_hist"]
-        st.markdown(texto)
+        st.markdown(texto.replace("$", "\\$"))
     # guarda o histórico (corta o começo se ficar grande, sempre numa pergunta do usuário)
     while len(hist) > 40:
         hist = hist[1:]
