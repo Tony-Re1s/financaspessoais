@@ -47,10 +47,12 @@ TIPOS_CONTA = {
     "previdencia": "Previdência",
     "financiamento": "Financiamento",
     "carteira": "Dinheiro / carteira",
+    "beneficio": "Benefício (VR/VA)",
     "outro": "Outro",
 }
 
-FORMAS_PAGAMENTO = ["Cartao de Credito", "Boleto", "Debito em Conta", "Pix", "Dinheiro", "Transferencia"]
+FORMAS_PAGAMENTO = ["Cartao de Credito", "Boleto", "Debito em Conta", "Pix", "Dinheiro", "Transferencia",
+                    "Beneficio (VR/VA)"]
 
 VISIBILIDADES = {
     "privado": "🔒 Privado — só eu vejo",

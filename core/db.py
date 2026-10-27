@@ -90,6 +90,10 @@ _MIGRACOES = [
           detalhe        jsonb,
           atualizado_em  timestamptz not null default now(),
           primary key (dono_id, mes_ref))"""),
+    # 011 — cartão de benefício (VR/VA): gasto conta nas categorias, mas não no fluxo das contas nem em fatura
+    ("select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid "
+     "where t.typname = 'tipo_conta' and e.enumlabel = 'beneficio'",
+     "alter type tipo_conta add value if not exists 'beneficio'"),
     # 010 — cor escolhida pelo usuário para o cartão/conta (hex); vazio = cor do banco
     ("select 1 from information_schema.columns where table_name = 'contas' and column_name = 'cor'",
      "alter table contas add column if not exists cor text"),

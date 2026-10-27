@@ -95,7 +95,8 @@ def ultima_funcao(u, cartao: str) -> str | None:
                   order by c.tratado_em desc limit 1""", u=u["id"], c=cartao.strip())
     if not r:
         return None
-    return "debito" if (r["forma_pagamento"] or "").lower().startswith("debito") else "credito"
+    f = (r["forma_pagamento"] or "").lower()
+    return "beneficio" if f.startswith("benef") else ("debito" if f.startswith("debito") else "credito")
 
 
 def lembrar_cartao(u, cartao: str, conta_id):
