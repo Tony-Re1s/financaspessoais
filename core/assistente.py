@@ -213,6 +213,7 @@ def _sistema(u) -> str:
         "aumentam o patrimônio, juros de evolução de obra e cartório são despesa.\n"
         "- Sobre investimentos: explique conceitos e compare alternativas de forma geral (liquidez, risco, custo), mas "
         "não indique um produto específico para comprar ou vender.\n"
+        "- Depois de consultar, SEMPRE escreva a resposta final completa para o usuário.\n"
         "- Use markdown leve: frases curtas, listas quando ajudar, no máximo uma tabela pequena."
     )
 
@@ -226,7 +227,7 @@ def conversar(u, historico: list[dict], ao_usar=None) -> tuple[str, list[dict]]:
     for _ in range(MAX_VOLTAS):
         r = httpx.post(URL, timeout=120, headers={"x-api-key": k, "anthropic-version": "2023-06-01",
                                                   "content-type": "application/json"},
-                       json={"model": modelo(), "max_tokens": 2500, "system": _sistema(u),
+                       json={"model": modelo(), "max_tokens": 6000, "system": _sistema(u),
                              "tools": _tools_api(), "messages": msgs})
         if r.status_code >= 400:
             try:
@@ -238,8 +239,19 @@ def conversar(u, historico: list[dict], ao_usar=None) -> tuple[str, list[dict]]:
         conteudo = resp["content"]
         msgs.append({"role": "assistant", "content": conteudo})
         usos = [b for b in conteudo if b.get("type") == "tool_use"]
-        if resp.get("stop_reason") != "tool_use" or not usos:
+        parada = resp.get("stop_reason")
+        if parada in ("max_tokens", "pause_turn") and not usos:
+            msgs.append({"role": "user", "content": "Continue de onde parou."})
+            continue
+        if parada != "tool_use" or not usos:
+            # texto da última resposta; se vier vazio, o que escreveu entre as consultas
             texto = "\n".join(b.get("text", "") for b in conteudo if b.get("type") == "text").strip()
+            if not texto:
+                texto = "\n\n".join(b.get("text", "") for m in msgs[len(historico):] if m["role"] == "assistant"
+                                    for b in (m["content"] if isinstance(m["content"], list) else [])
+                                    if b.get("type") == "text").strip()
+            if not texto:
+                texto = f"(A IA não escreveu a resposta — parada: {parada}. Tente perguntar de novo.)"
             return texto, msgs
         resultados = []
         for b in usos:
