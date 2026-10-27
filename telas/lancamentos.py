@@ -106,66 +106,125 @@ cartoes_kpi([("Receitas − despesas", brl(rec - desp)), ("↓ Despesas", brl(de
              ("A pagar", brl(df.loc[(df["tipo"] == "despesa") & (df["status"] == "previsto"), "valor"].sum())),
              ("Lançamentos", str(len(df)))], titulo="Lançamentos", icone="📋", direita=periodo)
 
-if cel:   # 3 colunas que cabem na tela: dia, o quê, quanto
-    vis = pd.DataFrame({
-        "dia": df["sit"] + " " + pd.to_datetime(df["data_vencimento"]).dt.strftime("%d/%m"),
-        "item": df["descricao"] + df["parcela"].map(lambda p: f" ({p})" if p else "")
-                + (" · " + df["dono_nome"].fillna("") if escopo == "nos" else ""),
-        "valor": df["valor"]})
-    cfg = {"dia": st.column_config.TextColumn("Venc.", width=78), "item": "Lançamento",
-           "valor": col_rs()}
-else:
-    colunas = ["sit", "data_vencimento", "descricao", "parcela", "categoria", "subcategoria", "conta", "valor"]
-    if escopo == "nos":
-        colunas.insert(1, "dono_nome")
-    vis = df[colunas].fillna({"conta": "—", "categoria": "—", "subcategoria": ""})
-    cfg = {"sit": st.column_config.TextColumn("", width=30), "dono_nome": "De quem",
-           "data_vencimento": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY"),
-           "descricao": "Descrição", "parcela": "Parc.", "categoria": "Categoria",
-           "subcategoria": "Subcategoria", "conta": "Conta", "valor": col_rs()}
-st.caption("Toque/clique na caixinha à esquerda para selecionar: ✏️ editar, 🏷️ trocar a categoria (de vários de uma vez), marcar como pago ou excluir.")
-sel = st.dataframe(em_reais(vis), hide_index=True, use_container_width=True,
-                   height=min(560, 35 * len(df) + 38), on_select="rerun", selection_mode="multi-row",
-                   column_config=cfg)
+# --- tabela editável: muda direto na célula; a caixinha ✓ serve para pagar/excluir em lote -------------
+from telas._comum import opcoes_categoria  # noqa: E402
 
-linhas = sel.selection.rows
-if linhas:
-    escolhidos = df.iloc[linhas]
-    meus = escolhidos[escolhidos["meu"]]
-    st.write(f"**{len(escolhidos)} selecionado(s)** · {brl(escolhidos['valor'].sum())}"
-             + ("" if len(meus) == len(escolhidos) else " · só os seus podem ser alterados"))
-    ids = list(meus["id"])
-    b0, b4, b1, b2, b3 = st.columns(5)
-    if b0.button("✏️ Editar", disabled=len(ids) != 1, use_container_width=True,
-                 help="Selecione um lançamento para editar tudo (descrição, valor, data, categoria, conta)"):
-        _ui.editar_lancamento(u, ids[0])
-    with b4.popover("🏷️ Categoria", disabled=not ids, use_container_width=True):
-        from core import db as _db
-        from telas._comum import opcoes_categoria
-        _cats = repo.categorias(u)
-        _tipo = meus["tipo"].iloc[0] if meus["tipo"].nunique() == 1 and meus["tipo"].iloc[0] in ("despesa", "receita") \
-            else "despesa"
-        _op = opcoes_categoria(_cats, _tipo)
-        nova_cat = st.selectbox("Nova categoria", list(_op), format_func=_op.get, index=None, placeholder="Escolha")
-        mesma_desc = st.checkbox("Aplicar também a todos os lançamentos com a mesma descrição (todos os meses)",
-                                 value=False)
-        if st.button("Aplicar", type="primary", disabled=nova_cat is None):
-            if mesma_desc:
-                n = _db.executar("""update lancamentos set categoria_id = :c, atualizado_em = now()
-                                     where dono_id = :u and (id = any(:ids) or lower(descricao) = any(:ds))""",
-                                 c=nova_cat, u=u["id"], ids=ids, ds=[d.lower() for d in meus["descricao"].dropna()])
-            else:
-                n = _db.executar("""update lancamentos set categoria_id = :c, atualizado_em = now()
-                                     where dono_id = :u and id = any(:ids)""", c=nova_cat, u=u["id"], ids=ids)
-            st.session_state["_ui_ok"] = f"Categoria trocada em {n} lançamentos."
-            st.rerun()
-    if b1.button("✅ Marcar como pago", disabled=not ids, use_container_width=True):
-        repo.mudar_status(u, ids, "pago"); st.rerun()
-    if b2.button("⏳ Voltar para previsto", disabled=not ids, use_container_width=True):
-        repo.mudar_status(u, ids, "previsto"); st.rerun()
-    tem_parcela = meus["grupo_parcela"].notna().any()
-    with b3.popover("🗑️ Excluir", disabled=not ids, use_container_width=True):
-        futuras = st.checkbox("Excluir também as parcelas seguintes", value=False, disabled=not tem_parcela)
-        st.caption("Não dá para desfazer.")
-        if st.button("Confirmar exclusão", type="primary"):
-            repo.excluir(u, ids, parcelas_futuras=futuras); st.rerun()
+_cats = repo.categorias(u)
+_op_cat = opcoes_categoria(_cats, "despesa") | opcoes_categoria(_cats, "receita")
+_rot_cat = {v: k for k, v in _op_cat.items()}           # rótulo -> id
+_contas_df = repo.contas(u, so_ativas=False)
+_op_conta = dict(zip(_contas_df["nome"], _contas_df["id"]))
+SEM = "— sem categoria"
+SEMC = "— sem conta"
+SIT = {"pago": "✅ Pago", "previsto": "⏳ Previsto"}
+SIT_R = {v: k for k, v in SIT.items()}
+
+
+def _rotulo_cat(r):
+    if not isinstance(r["categoria"], str) or r["categoria"] == "Sem categoria":
+        return SEM
+    rot = f"{r['categoria']} › {r['subcategoria']}" if isinstance(r["subcategoria"], str) else r["categoria"]
+    return rot if rot in _rot_cat else (r["categoria"] if r["categoria"] in _rot_cat else rot)
+
+
+base = pd.DataFrame({
+    "sel": False,
+    "situacao": df["status"].map(SIT).fillna(df["status"]),
+    "data": pd.to_datetime(df["data_vencimento"]),
+    "descricao": df["descricao"],
+    "parcela": df["parcela"],
+    "categoria": df.apply(_rotulo_cat, axis=1),
+    "conta": df["conta"].fillna(SEMC),
+    "valor": df["valor"].astype(float),
+})
+if escopo == "nos":
+    base.insert(1, "de", df["dono_nome"])
+op_cats_col = [SEM] + sorted(set(_op_cat.values()) | set(base["categoria"]) - {SEM})
+op_contas_col = [SEMC] + sorted(set(_op_conta) | set(base["conta"]) - {SEMC})
+cfg = {
+    "sel": st.column_config.CheckboxColumn("✓", width=36, help="Marque para pagar ou excluir em lote"),
+    "de": st.column_config.TextColumn("De quem", disabled=True),
+    "situacao": st.column_config.SelectboxColumn("Situação", options=list(SIT.values()), width=110, required=True),
+    "data": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY", width=110),
+    "descricao": st.column_config.TextColumn("Descrição", width="medium"),
+    "parcela": st.column_config.TextColumn("Parc.", disabled=True, width=60),
+    "categoria": st.column_config.SelectboxColumn("Categoria › sub", options=op_cats_col, width="medium"),
+    "conta": st.column_config.SelectboxColumn("Conta / cartão", options=op_contas_col, width=150),
+    "valor": st.column_config.NumberColumn("Valor", format="R$ %.2f", min_value=0.0, step=0.01, width=110),
+}
+ordem = ["sel", "data", "descricao", "categoria", "valor"] if cel else \
+    (["sel"] + (["de"] if escopo == "nos" else []) +
+     ["situacao", "data", "descricao", "parcela", "categoria", "conta", "valor"])
+st.caption("✏️ Edite direto na tabela (categoria, conta, situação, data, descrição, valor) — nada é gravado até "
+           "você tocar em **Salvar alterações**. A coluna ✓ marca vários para pagar ou excluir de uma vez.")
+chave_ed = f"ed_lanc_{ini}_{fim}_{escopo}_{len(df)}"
+with st.form(f"form_{chave_ed}", border=False):
+    editado = st.data_editor(base, column_config=cfg, column_order=ordem, hide_index=True, use_container_width=True,
+                             height=min(600, 35 * len(base) + 40), key=chave_ed)
+    mesma_desc = st.checkbox("Categoria nova vale também para os outros com a mesma descrição (todos os meses)")
+    f1_, f2_, f3_, f4_ = st.columns([1.4, 1.2, 1.2, 1.2]) if not cel else (st.container(),) * 4
+    salvar = f1_.form_submit_button("💾 Salvar alterações", type="primary", use_container_width=True)
+    pagar = f2_.form_submit_button("✅ Marcados: pago", use_container_width=True)
+    prever = f3_.form_submit_button("⏳ Marcados: previsto", use_container_width=True)
+    apagar = f4_.form_submit_button("🗑️ Excluir marcados", use_container_width=True)
+    a1_, a2_ = st.columns(2)
+    conf_exc = a1_.checkbox("Confirmo a exclusão dos marcados (não dá para desfazer)")
+    futuras = a2_.checkbox("Ao excluir, levar também as parcelas seguintes")
+
+from core import db as _db  # noqa: E402
+
+if salvar:
+    campos = ["situacao", "data", "descricao", "categoria", "conta", "valor"]
+    mud = (editado[campos].astype(str) != base[campos].astype(str)).any(axis=1)
+    alterados = editado[mud]
+    if alterados.empty:
+        st.info("Nada foi alterado na tabela.")
+    else:
+        n, pulados = 0, 0
+        _atual = _db.consultar("select id, categoria_id, conta_id from lancamentos where dono_id = :u and id = any(:ids)",
+                               u=u["id"], ids=list(df.loc[alterados.index, "id"])).set_index("id")
+        for idx, r in alterados.iterrows():
+            orig = df.loc[idx]
+            if not orig["meu"] or orig["id"] not in _atual.index:
+                pulados += 1
+                continue
+            cat_id = _atual.loc[orig["id"], "categoria_id"] if r["categoria"] == base.loc[idx, "categoria"] else \
+                (None if r["categoria"] == SEM else _rot_cat.get(r["categoria"], _atual.loc[orig["id"], "categoria_id"]))
+            conta_id = _atual.loc[orig["id"], "conta_id"] if r["conta"] == base.loc[idx, "conta"] else \
+                (None if r["conta"] == SEMC else _op_conta.get(r["conta"]))
+            cat_id = None if pd.isna(cat_id) else cat_id
+            conta_id = None if pd.isna(conta_id) else conta_id
+            dv = pd.Timestamp(r["data"]).date() if pd.notna(r["data"]) else orig["data_vencimento"]
+            dc = orig["data_compra"] if pd.notna(orig["data_compra"]) else dv
+            repo.atualizar_lancamento(u, orig["id"], dict(descricao=str(r["descricao"] or orig["descricao"]).strip(),
+                                                           valor=float(r["valor"]), categoria_id=cat_id,
+                                                           conta_id=conta_id, data_compra=dc, data_vencimento=dv,
+                                                           status=SIT_R.get(r["situacao"], orig["status"])))
+            if mesma_desc and r["categoria"] != base.loc[idx, "categoria"]:
+                _db.executar("""update lancamentos set categoria_id = :c, atualizado_em = now()
+                                 where dono_id = :u and lower(descricao) = lower(:d)""",
+                             c=cat_id, u=u["id"], d=orig["descricao"])
+            n += 1
+        st.session_state["_ui_ok"] = f"{n} lançamentos salvos." + (
+            f" {pulados} do outro membro ficaram como estavam." if pulados else "")
+        st.session_state.pop(chave_ed, None)
+        st.rerun()
+
+if pagar or prever or apagar:
+    marcados = editado[editado["sel"]]
+    escolhidos = df.loc[marcados.index]
+    ids = list(escolhidos[escolhidos["meu"]]["id"])
+    if not ids:
+        st.warning("Marque na coluna ✓ os lançamentos (seus) que quer alterar.")
+    elif apagar and not conf_exc:
+        st.warning("Marque **Confirmo a exclusão** para excluir.")
+    else:
+        if apagar:
+            repo.excluir(u, ids, parcelas_futuras=futuras)
+            msg = f"{len(ids)} lançamentos excluídos."
+        else:
+            repo.mudar_status(u, ids, "pago" if pagar else "previsto")
+            msg = f"{len(ids)} lançamentos marcados como {'pagos' if pagar else 'previstos'}."
+        st.session_state["_ui_ok"] = msg
+        st.session_state.pop(chave_ed, None)
+        st.rerun()
