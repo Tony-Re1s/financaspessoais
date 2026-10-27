@@ -35,10 +35,18 @@ if df.empty:
     st.info("Nada lançado nesse período.")
     st.stop()
 
-with st.expander("Conta e categoria"):
+_tipos = dict(zip(repo.contas(u, so_ativas=False)["nome"], repo.contas(u, so_ativas=False)["tipo"]))
+_MEIO = {"cartao_credito": "💳 Cartão de crédito", "beneficio": "🍽️ VR/VA"}
+df["meio"] = df["conta"].map(lambda c: "📄 Sem conta (boleto/pix)" if not isinstance(c, str)
+                              else _MEIO.get(_tipos.get(c), "🏦 Conta corrente"))
+with st.expander("Meio de pagamento, conta e categoria"):
+    f_meio = st.segmented_control("Meio", sorted(df["meio"].unique()), selection_mode="multi", key="f_meio",
+                                  label_visibility="collapsed")
     g1, g2 = st.columns(2)
     f_contas = g1.multiselect("Conta / cartão", sorted(df["conta"].dropna().unique()))
     f_cats = g2.multiselect("Categoria", sorted(df["categoria"].dropna().unique()))
+if f_meio:
+    df = df[df["meio"].isin(f_meio)]
 
 if status_f != "todos":
     df = df[df["status"] == status_f]

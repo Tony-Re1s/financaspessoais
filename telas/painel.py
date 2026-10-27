@@ -170,6 +170,81 @@ with st.container(border=True):
                "Transferências entre as suas contas não contam como entrada nem saída. Meses à frente = previsão "
                "(contas fixas, parcelas e faturas já lançadas).")
 
+# --- por conta e por cartão, mês a mês ---------------------------------------------------------------
+st.markdown("<div class='ui-sec'>Contas e cartões mês a mês</div>", unsafe_allow_html=True)
+visao = st.segmented_control("Ver", ["contas", "cartoes"], default="contas", key="painel_visao",
+                             format_func={"contas": "🏦 Saldo de cada conta", "cartoes": "💳 Quanto pagar de cada cartão"}.get,
+                             label_visibility="collapsed") or "contas"
+_cab_m = "".join(f"<th class='{'sel' if m == sel else ''}{' fut' if m > atual else ''}'>{mes_label(m)}</th>"
+                 for m in meses)
+
+
+def _td(v, m, cls=""):
+    return f"<td class='{'sel' if m == sel else ''} {cls}'>{brl(v) if abs(v) > 0.004 else '—'}</td>"
+
+
+if visao == "contas":
+    if caixa.empty:
+        st.caption("Cadastre suas contas correntes para ver o saldo de cada uma.")
+    for c in caixa.itertuples():
+        e = ext[ext["conta"].astype(str) == str(c.id)] if not ext.empty else ext
+        try:
+            s_c = saldos.saldo_em(u, c.id, ini_w - timedelta(days=1))
+        except Exception:  # noqa: BLE001
+            s_c = 0.0
+        lin = {"ini": [], "ent": [], "fat": [], "out": [], "fim": []}
+        for m in meses:
+            d = e[e["mes"] == m] if not e.empty else e
+            real = d[d["fonte"] != "ajuste"] if not d.empty else d
+            ent = float(real.loc[real["valor"] > 0, "valor"].sum()) if not real.empty else 0.0
+            fat_ = float(-real.loc[(real["valor"] < 0) & (real["fonte"] == "fatura"), "valor"].sum()) if not real.empty else 0.0
+            out = float(-real.loc[(real["valor"] < 0) & (real["fonte"] != "fatura"), "valor"].sum()) if not real.empty else 0.0
+            tot = float(d["valor"].sum()) if not d.empty else 0.0
+            lin["ini"].append(s_c); lin["ent"].append(ent); lin["fat"].append(fat_); lin["out"].append(out)
+            s_c += tot
+            lin["fim"].append(s_c)
+        linhas = "".join(
+            f"<tr><th>{rot}</th>{''.join(_td(v, m, cls) for v, m in zip(lin[k], meses))}</tr>"
+            for rot, k, cls in [("Saldo inicial", "ini", ""), ("↑ Entradas", "ent", "pos"),
+                                ("↓ Faturas de cartão", "fat", "neg"), ("↓ Outras saídas", "out", "neg"),
+                                ("Sobra no fim do mês", "fim", "fim")])
+        _ui.render(f"""<div class="ui-lista-html" style="margin-bottom:12px">
+            <div class="ui-item" style="padding:10px 0 4px">{_ui.selo(c.nome, c.instituicao, 34)}
+              <div class="ui-tx"><div class="t">{_ui.esc(c.nome)}</div>
+              <div class="s">em {mes_label(sel)}: sobra {brl(lin['fim'][meses.index(sel)])}</div></div></div>
+            <div class="ui-fluxo"><table><thead><tr><th></th>{_cab_m}</tr></thead><tbody>{linhas}</tbody></table></div>
+            </div>""")
+    st.caption("Entradas e saídas incluem transferências entre as suas contas. As faturas saem da conta que paga, no "
+               "vencimento (defina em Contas e cartões → Fatura paga pela conta).")
+else:
+    fat_all = cartoes.faturas(u)
+    info_c = contas.set_index("id")
+    if fat_all.empty:
+        st.caption("Nenhuma fatura no app ainda.")
+    else:
+        linhas, total = [], {m: 0.0 for m in meses}
+        for cid, g in fat_all.groupby("cartao_id"):
+            if cid not in info_c.index:
+                continue
+            c = info_c.loc[cid]
+            por = dict(zip(g["mes_ref"], g["total"]))
+            pagas = set(g.loc[g["paga"], "mes_ref"])
+            for m in meses:
+                total[m] += float(por.get(m, 0.0))
+            paga_por = info_c.loc[c["conta_pagamento_id"], "nome"] if pd.notna(c.get("conta_pagamento_id")) and \
+                c["conta_pagamento_id"] in info_c.index else "sem conta definida"
+            tds = "".join(f"<td class='{'sel' if m == sel else ''} neg'>{brl(por[m]) if por.get(m) else '—'}"
+                          f"{' ✓' if m in pagas else ''}</td>" for m in meses)
+            linhas.append(f"<tr><th><div class='ui-item' style='gap:8px'>{_ui.selo(c['nome'], c['instituicao'], 26)}"
+                          f"<div><div style='font-weight:700'>{_ui.esc(c['nome'])}</div>"
+                          f"<div style='font-size:.7rem;opacity:.6;font-weight:500'>sai de {_ui.esc(paga_por)}</div>"
+                          f"</div></div></th>{tds}</tr>")
+        tds_t = "".join(f"<td class='{'sel' if m == sel else ''} fim'>{brl(total[m]) if total[m] else '—'}</td>"
+                        for m in meses)
+        _ui.render(f"""<div class="ui-lista-html"><div class="ui-fluxo"><table><thead><tr><th></th>{_cab_m}</tr></thead>
+            <tbody>{''.join(linhas)}<tr><th>Total dos cartões</th>{tds_t}</tr></tbody></table></div></div>""")
+        st.caption("✓ = fatura marcada como paga. Clique em **Ver faturas** para o detalhe de cada uma.")
+
 # --- contas e cartões ---------------------------------------------------------------------------
 cards = []
 for r in caixa.itertuples():
