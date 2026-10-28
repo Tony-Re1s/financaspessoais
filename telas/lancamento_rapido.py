@@ -12,7 +12,7 @@ from core import deducoes as _dd
 
 u = usuario()
 _ui.titulo("Lançamento rápido", "⚡")
-st.caption("Tire foto do comprovante ou escreva do seu jeito (“mercado 45 nubank débito”). "
+st.caption("Tire foto do comprovante, fale ou escreva do seu jeito (“mercado 45 nubank débito”). "
            "A IA preenche e você só confere.")
 
 if msg := st.session_state.pop("_ok_rapido", None):
@@ -31,8 +31,10 @@ op_todas = {r.id: r.nome for r in contas.itertuples()}
 op_cat_d = opcoes_categoria(repo.categorias(u), "despesa")
 op_cat_r = opcoes_categoria(repo.categorias(u), "receita")
 
-modo = st.segmented_control("Como", ["foto", "texto"], default="foto", label_visibility="collapsed",
-                            format_func={"foto": "📷 Foto do comprovante", "texto": "✍️ Texto"}.get) or "foto"
+modo = st.segmented_control("Como", ["foto", "voz", "texto"], default="foto", label_visibility="collapsed",
+                            format_func={"foto": "📷 Foto", "voz": "🎤 Voz", "texto": "✍️ Texto"}.get) or "foto"
+_VOZ_JS = __import__("pathlib").Path(__file__).parent.parent / "static" / "voz.js"
+auto = False
 
 with st.container(border=True):
     if modo == "foto":
@@ -42,11 +44,31 @@ with st.container(border=True):
                             key="rap_obs")
         pronto = foto is not None
     else:
-        obs = st.text_area("O que você gastou?", placeholder="almoço 38,90 ontem no latam\n"
-                           "uber 23 nubank\nfarmácia 120 em 3x no itaú", key="rap_txt", height=90)
+        if modo == "voz":
+            st.markdown("""<style>
+.st-key-voz_btn {align-items: center; text-align: center;}
+.fin-mic {width: 100%; padding: 22px 16px; border-radius: 18px; border: 0; cursor: pointer; font-size: 1.15rem;
+  font-weight: 800; color: #fff; background: linear-gradient(135deg, #0F766E, #14B8A6);
+  box-shadow: 0 8px 24px rgba(15,118,110,.25);}
+.fin-mic.on {background: linear-gradient(135deg, #B91C1C, #EF4444); animation: fin-pulso 1.2s infinite;}
+.fin-mic:disabled {opacity: .5; cursor: default;}
+.fin-mic-info {font-size: .82rem; opacity: .75; margin-top: 8px; min-height: 1em;}
+@keyframes fin-pulso {0%,100% {box-shadow: 0 0 0 0 rgba(239,68,68,.45);} 50% {box-shadow: 0 0 0 14px rgba(239,68,68,0);}}
+</style>""", unsafe_allow_html=True)
+            with st.container(key="voz_btn"):
+                st.html(f"<script>{_VOZ_JS.read_text(encoding='utf-8')}</script>", unsafe_allow_javascript=True)
+            st.caption("Fale valor, onde, e como pagou: “farmácia 120 em 3 vezes no Itaú”, “uber 23 ontem no "
+                       "Nubank”, “mercado 85 e 90 no débito”. Dá para corrigir o texto antes de lançar.")
+        obs = st.text_area("O que você falou" if modo == "voz" else "O que você gastou?",
+                           placeholder="almoço 38,90 ontem no latam\nuber 23 nubank\nfarmácia 120 em 3x no itaú",
+                           key="rap_txt", height=90)
         foto, pronto = None, bool(obs.strip())
+        # voz: quando o ditado termina, já manda ler (uma vez por texto)
+        if modo == "voz" and pronto and st.session_state.get("_voz_lido") != obs.strip():
+            st.session_state["_voz_lido"] = obs.strip()
+            auto = True
     if st.button("Ler com IA", type="primary", icon=":material/auto_awesome:", disabled=not pronto,
-                 use_container_width=True):
+                 use_container_width=True) or auto:
         try:
             with st.spinner("Lendo…"):
                 img = ia.preparar_imagem(foto.getvalue()) if foto else None
