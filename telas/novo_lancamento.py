@@ -32,11 +32,15 @@ op_cat = opcoes_categoria(cats, tipo)
 categoria_id = c1.selectbox("Categoria", list(op_cat), format_func=op_cat.get, index=None,
                             placeholder="Escolha a categoria", key="f_cat")
 op_contas = {None: "— sem conta (boleto, pix avulso…)"} | {
-    r.id: f"{r.nome} · {TIPOS_CONTA.get(r.tipo, r.tipo)}" for r in contas.itertuples()}
+    r.id: f"{r.nome} · {TIPOS_CONTA.get(r.tipo, r.tipo)}" for r in contas.assign(
+        _o=contas["tipo"].map({"conta_corrente": 0, "carteira": 1, "poupanca": 2, "cartao_credito": 3,
+                               "beneficio": 4}).fillna(9)).sort_values(["_o", "nome"]).itertuples()}
 conta_id = c2.selectbox("Conta / cartão", list(op_contas), format_func=op_contas.get, key="f_conta")
 
 conta = contas[contas["id"] == conta_id].iloc[0] if conta_id else None
 e_cartao = conta is not None and conta["tipo"] == "cartao_credito"
+
+_aviso_onde = st.empty()
 
 # --- o resto fica recolhido; os padrões já servem na maioria das vezes -------------------
 with st.expander("Mais opções"):
@@ -59,7 +63,10 @@ with st.expander("Mais opções"):
     op_vis = {None: "Herdar da categoria/conta"} | VISIBILIDADES
     visibilidade = c2.selectbox("Quem vê", list(op_vis), format_func=op_vis.get)
 
-    status = st.radio("Situação", ["previsto", "pago"], horizontal=True,
+    # conta corrente/carteira com data de hoje ou antes = já saiu da conta; cartão = vai para a fatura
+    ja_pago = conta is not None and not e_cartao and data_venc <= hoje()
+    status = st.radio("Situação", ["previsto", "pago"], horizontal=True, index=1 if ja_pago else 0,
+                      key=f"f_status_{conta_id}_{data_venc}",
                       format_func=lambda s: "⏳ A pagar / previsto" if s == "previsto" else "✅ Já pago")
 
     c1, c2 = st.columns(2)
@@ -91,6 +98,11 @@ if len(linhas) > 1 and valor > 0:
                      column_config={"Vencimento": st.column_config.DateColumn(format="DD/MM/YYYY"),
                                     "valor": col_rs()})
 
+if conta is not None:
+    _onde = (f"💳 Vai para a fatura do **{conta['nome']}** que vence em **{data_venc:%d/%m/%Y}**" if e_cartao else
+             f"🏦 {'Sai' if tipo == 'despesa' else 'Entra'} na conta **{conta['nome']}** em **{data_venc:%d/%m/%Y}** · "
+             + ("✅ já pago" if status == "pago" else "⏳ previsto"))
+    _aviso_onde.caption(_onde)
 faltando = [n for n, v in [("valor", valor > 0), ("descrição", descricao.strip()), ("categoria", categoria_id)]
             if not v]
 if st.button("Salvar", type="primary", icon=":material/save:", disabled=bool(faltando),

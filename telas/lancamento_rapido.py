@@ -72,7 +72,8 @@ with st.container(border=True):
         try:
             with st.spinner("Lendo…"):
                 img = ia.preparar_imagem(foto.getvalue()) if foto else None
-                r = ia.interpretar(op_todas, op_cat_d | op_cat_r, hoje(), texto=obs.strip() or None,
+                r = ia.interpretar(op_todas, {k: f"(gasto) {v}" for k, v in op_cat_d.items()}
+                                   | {k: f"(entrada) {v}" for k, v in op_cat_r.items()}, hoje(), texto=obs.strip() or None,
                                    imagem_jpeg=img)
             st.session_state["rap_res"] = r
             st.session_state["rap_img"] = ia.preparar_imagem(foto.getvalue(), lado=1000, qualidade=60) if foto else None
@@ -145,6 +146,8 @@ else:
 
 faltando = [n for n, ok in [("valor", valor > 0), ("descrição", descricao.strip()), ("categoria", categoria_id),
                             ("cartão", conta_id or not credito)] if not ok]
+if faltando:
+    st.warning(f"Para salvar, escolha: **{', '.join(faltando)}**.", icon=":material/info:")
 b1, b2 = st.columns([2, 1])
 if b1.button("Salvar", type="primary", icon=":material/save:", use_container_width=True, disabled=bool(faltando),
              help=f"Falta: {', '.join(faltando)}" if faltando else None):

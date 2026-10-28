@@ -83,7 +83,9 @@ INSTRUCOES = (
     "Você ajuda a lançar gastos num app de finanças pessoais brasileiro. Extraia UM lançamento e chame a "
     "ferramenta registrar_lancamento. Em cupom fiscal use o TOTAL pago (não subtotal, troco ou tributos). "
     "'ontem', 'sexta' etc. são relativos a hoje. Se o texto citar um banco/cartão, escolha a conta mais "
-    "parecida; senão deixe conta nula. Escolha sempre a categoria mais provável. Descrição curta, sem CNPJ. "
+    "parecida; senão deixe conta nula. Escolha sempre a categoria mais provável e coerente com o tipo: gasto "
+    "só usa categoria '(gasto)', entrada só '(entrada)' (loteria/aposta/jogo é gasto de lazer). Descrição curta, "
+    "sem CNPJ. "
     "Valor falado como 'X e Y' (Y com dois dígitos), ex.: '15 e 90' ou '15 reais e 90', é X reais e Y "
     "centavos (R$ 15,90) — nunca some os números.")
 
