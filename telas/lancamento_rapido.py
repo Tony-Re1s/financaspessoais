@@ -58,7 +58,7 @@ with st.container(border=True):
             with st.container(key="voz_btn"):
                 st.html(f"<script>{_VOZ_JS.read_text(encoding='utf-8')}</script>", unsafe_allow_javascript=True)
             st.caption("Fale valor, onde, e como pagou: “farmácia 120 em 3 vezes no Itaú”, “uber 23 ontem no "
-                       "Nubank”, “mercado 85 e 90 no débito”. Dá para corrigir o texto antes de lançar.")
+                       "Nubank”, “mercado 85 e 90 no débito” (= R$ 85,90). Dá para corrigir o texto antes de lançar.")
         obs = st.text_area("O que você falou" if modo == "voz" else "O que você gastou?",
                            placeholder="almoço 38,90 ontem no latam\nuber 23 nubank\nfarmácia 120 em 3x no itaú",
                            key="rap_txt", height=90)

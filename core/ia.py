@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import re
 from datetime import date
 
 import httpx
@@ -82,7 +83,25 @@ INSTRUCOES = (
     "Você ajuda a lançar gastos num app de finanças pessoais brasileiro. Extraia UM lançamento e chame a "
     "ferramenta registrar_lancamento. Em cupom fiscal use o TOTAL pago (não subtotal, troco ou tributos). "
     "'ontem', 'sexta' etc. são relativos a hoje. Se o texto citar um banco/cartão, escolha a conta mais "
-    "parecida; senão deixe conta nula. Escolha sempre a categoria mais provável. Descrição curta, sem CNPJ.")
+    "parecida; senão deixe conta nula. Escolha sempre a categoria mais provável. Descrição curta, sem CNPJ. "
+    "Valor falado como 'X e Y' (Y com dois dígitos), ex.: '15 e 90' ou '15 reais e 90', é X reais e Y "
+    "centavos (R$ 15,90) — nunca some os números.")
+
+
+_RX_CENT = re.compile(r"\b(\d{1,6})\s*(?:reais|real|r\$)?\s+e\s+(\d{1,2})\s*centavos?\b", re.I)
+_RX_REAIS_E = re.compile(r"\b(\d{1,6})\s*(?:reais|real)\s+e\s+(\d{2})\b", re.I)
+_RX_X_E_YY = re.compile(r"\b(\d{1,6})\s+e\s+(\d{2})\b(?!\s*(?:vezes|x\b|parcelas?|dias?|meses|m[eê]s|%))",
+                        re.I)
+
+
+def normalizar_valores(texto: str) -> str:
+    """Valor falado em português: '15 e 90', '15 reais e 90', '15 reais e 90 centavos' -> '15,90'.
+    Não mexe em '3 e 10 vezes', '2 e 15 dias' etc."""
+    if not texto:
+        return texto
+    t = _RX_CENT.sub(lambda m: f"{m.group(1)},{int(m.group(2)):02d}", texto)
+    t = _RX_REAIS_E.sub(lambda m: f"{m.group(1)},{m.group(2)}", t)
+    return _RX_X_E_YY.sub(lambda m: f"{m.group(1)},{m.group(2)}", t)
 
 
 def interpretar(contas: dict, categorias: dict, hoje: date, texto: str | None = None,
@@ -92,6 +111,7 @@ def interpretar(contas: dict, categorias: dict, hoje: date, texto: str | None = 
     if not k:
         raise RuntimeError("Falta a chave da Anthropic nos Secrets ([anthropic] api_key).")
     ctx, lc, lk = _contexto(contas, categorias, hoje)
+    texto = normalizar_valores(texto) if texto else texto
     conteudo = [{"type": "text", "text": ctx}]
     if imagem_jpeg:
         conteudo.append({"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
