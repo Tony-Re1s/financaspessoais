@@ -142,7 +142,8 @@ if escopo == "nos":
 op_cats_col = [SEM] + sorted(set(_op_cat.values()) | set(base["categoria"]) - {SEM})
 op_contas_col = [SEMC] + sorted(set(_op_conta) | set(base["conta"]) - {SEMC})
 cfg = {
-    "sel": st.column_config.CheckboxColumn("✓", width=36, help="Marque para pagar ou excluir em lote"),
+    "sel": st.column_config.CheckboxColumn("✓", width=36, help="Marque para pagar ou excluir em lote. "
+                                          "Os que já estão ✅ Pago são ignorados no ✅ Marcados: pago."),
     "de": st.column_config.TextColumn("De quem", disabled=True),
     "situacao": st.column_config.SelectboxColumn("Situação", options=list(SIT.values()), width=110, required=True),
     "data": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY", width=110),
@@ -152,11 +153,15 @@ cfg = {
     "conta": st.column_config.SelectboxColumn("Conta / cartão", options=op_contas_col, width=150),
     "valor": st.column_config.NumberColumn("Valor", format="R$ %.2f", min_value=0.0, step=0.01, width=110),
 }
-ordem = ["sel", "data", "descricao", "categoria", "valor"] if cel else \
+ordem = ["sel", "situacao", "data", "descricao", "categoria", "valor"] if cel else \
     (["sel"] + (["de"] if escopo == "nos" else []) +
      ["situacao", "data", "descricao", "parcela", "categoria", "conta", "valor"])
 st.caption("✏️ Edite direto na tabela (categoria, conta, situação, data, descrição, valor) — nada é gravado até "
            "você tocar em **Salvar alterações**. A coluna ✓ marca vários para pagar ou excluir de uma vez.")
+if _sc := st.session_state.pop("_lanc_sem_conta", None):
+    st.warning(f"**{len(_sc)} sem conta — não marquei como pago:** " + ", ".join(_sc[:8])
+               + ("…" if len(_sc) > 8 else "") + ". Escolha de qual conta saiu na coluna **Conta / cartão** "
+               "e toque de novo em ✅ Marcados: pago.", icon=":material/account_balance:")
 chave_ed = f"ed_lanc_{ini}_{fim}_{escopo}_{len(df)}"
 with st.form(f"form_{chave_ed}", border=False):
     editado = st.data_editor(base, column_config=cfg, column_order=ordem, hide_index=True, use_container_width=True,
@@ -222,9 +227,32 @@ if pagar or prever or apagar:
         if apagar:
             repo.excluir(u, ids, parcelas_futuras=futuras)
             msg = f"{len(ids)} lançamentos excluídos."
+        elif pagar:
+            m = escolhidos[escolhidos["meu"]].copy()
+            m["_conta_ed"] = editado.loc[m.index, "conta"]
+            ja = m[m["status"] == "pago"]
+            m = m[m["status"] != "pago"]
+            # conta escolhida agora na tabela (sem salvar) vale para o pagamento
+            for idx, r in m.iterrows():
+                if r["_conta_ed"] != base.loc[idx, "conta"] and r["_conta_ed"] != SEMC and r["_conta_ed"] in _op_conta:
+                    _db.executar("update lancamentos set conta_id = :c, atualizado_em = now() where id = :i and dono_id = :u",
+                                 c=_op_conta[r["_conta_ed"]], i=r["id"], u=u["id"])
+                    m.loc[idx, "conta"] = r["_conta_ed"]
+            sem_conta = m[m["conta"].isna() | (m["conta"] == SEMC)]
+            ok = m.drop(sem_conta.index)
+            if not ok.empty:
+                repo.mudar_status(u, list(ok["id"]), "pago")
+            partes = [f"{len(ok)} marcados como pagos."] if not ok.empty else []
+            if not ja.empty:
+                partes.append(f"{len(ja)} já estavam pagos — ignorados.")
+            if not sem_conta.empty:
+                st.session_state["_lanc_sem_conta"] = list(sem_conta["descricao"])
+            st.session_state["_ui_ok"] = " ".join(partes) or "Nada para marcar."
+            st.session_state.pop(chave_ed, None)
+            st.rerun()
         else:
-            repo.mudar_status(u, ids, "pago" if pagar else "previsto")
-            msg = f"{len(ids)} lançamentos marcados como {'pagos' if pagar else 'previstos'}."
+            repo.mudar_status(u, ids, "previsto")
+            msg = f"{len(ids)} lançamentos marcados como previstos."
         st.session_state["_ui_ok"] = msg
         st.session_state.pop(chave_ed, None)
         st.rerun()
