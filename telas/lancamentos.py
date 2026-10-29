@@ -127,69 +127,78 @@ def _rotulo_cat(r):
     return rot if rot in _rot_cat else (r["categoria"] if r["categoria"] in _rot_cat else rot)
 
 
-base = pd.DataFrame({
-    "sel": False,
-    "situacao": df["status"].map(SIT).fillna(df["status"]),
-    "data": pd.to_datetime(df["data_vencimento"]),
-    "descricao": df["descricao"],
-    "parcela": df["parcela"],
-    "categoria": df.apply(_rotulo_cat, axis=1),
-    "conta": df["conta"].fillna(SEMC),
-    "valor": df["valor"].astype(float),
-})
-if escopo == "nos":
-    base.insert(1, "de", df["dono_nome"])
-op_cats_col = [SEM] + sorted(set(_op_cat.values()) | set(base["categoria"]) - {SEM})
-op_contas_col = [SEMC] + sorted(set(_op_conta) | set(base["conta"]) - {SEMC})
-cfg = {
-    "sel": st.column_config.CheckboxColumn("✓", width=36, help="Marque para pagar ou excluir em lote. "
-                                          "Os que já estão ✅ Pago são ignorados no ✅ Marcados: pago."),
-    "de": st.column_config.TextColumn("De quem", disabled=True),
-    "situacao": st.column_config.SelectboxColumn("Situação", options=list(SIT.values()), width=110, required=True),
-    "data": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY", width=110),
-    "descricao": st.column_config.TextColumn("Descrição", width="medium"),
-    "parcela": st.column_config.TextColumn("Parc.", disabled=True, width=60),
-    "categoria": st.column_config.SelectboxColumn("Categoria › sub", options=op_cats_col, width="medium"),
-    "conta": st.column_config.SelectboxColumn("Conta / cartão", options=op_contas_col, width=150),
-    "valor": st.column_config.NumberColumn("Valor", format="R$ %.2f", min_value=0.0, step=0.01, width=110),
-}
-ordem = ["sel", "situacao", "data", "descricao", "categoria", "valor"] if cel else \
-    (["sel"] + (["de"] if escopo == "nos" else []) +
-     ["situacao", "data", "descricao", "parcela", "categoria", "conta", "valor"])
-st.caption("✏️ Edite direto na tabela (categoria, conta, situação, data, descrição, valor) — nada é gravado até "
-           "você tocar em **Salvar alterações**. A coluna ✓ marca vários para pagar ou excluir de uma vez.")
-if _sc := st.session_state.pop("_lanc_sem_conta", None):
-    st.warning(f"**{len(_sc)} sem conta — não marquei como pago:** " + ", ".join(_sc[:8])
-               + ("…" if len(_sc) > 8 else "") + ". Escolha de qual conta saiu na coluna **Conta / cartão** "
-               "e toque de novo em ✅ Marcados: pago.", icon=":material/account_balance:")
-chave_ed = f"ed_lanc_{ini}_{fim}_{escopo}_{len(df)}"
-with st.form(f"form_{chave_ed}", border=False):
-    editado = st.data_editor(base, column_config=cfg, column_order=ordem, hide_index=True, use_container_width=True,
-                             height=min(600, 35 * len(base) + 40), key=chave_ed)
-    mesma_desc = st.checkbox("Categoria nova vale também para os outros com a mesma descrição (todos os meses)")
-    f1_, f2_, f3_, f4_ = st.columns([1.4, 1.2, 1.2, 1.2]) if not cel else (st.container(),) * 4
-    salvar = f1_.form_submit_button("💾 Salvar alterações", type="primary", use_container_width=True)
-    pagar = f2_.form_submit_button("✅ Marcados: pago", use_container_width=True)
-    prever = f3_.form_submit_button("⏳ Marcados: previsto", use_container_width=True)
-    apagar = f4_.form_submit_button("🗑️ Excluir marcados", use_container_width=True)
-    a1_, a2_ = st.columns(2)
-    conf_exc = a1_.checkbox("Confirmo a exclusão dos marcados (não dá para desfazer)")
-    futuras = a2_.checkbox("Ao excluir, levar também as parcelas seguintes")
 
 from core import db as _db  # noqa: E402
 
-if salvar:
-    campos = ["situacao", "data", "descricao", "categoria", "conta", "valor"]
-    mud = (editado[campos].astype(str) != base[campos].astype(str)).any(axis=1)
-    alterados = editado[mud]
-    if alterados.empty:
-        st.info("Nada foi alterado na tabela.")
-    else:
+
+def _tabela(dfp: pd.DataFrame, aba: str):
+    """aba 'aberto' (previstos: pagar/excluir) ou 'pago' (pagos: voltar a previsto/excluir)."""
+    if dfp.empty:
+        st.caption("Nada aqui no período e filtros escolhidos.")
+        return
+    base = pd.DataFrame({
+        "sel": False,
+        "situacao": dfp["status"].map(SIT).fillna(dfp["status"]),
+        "data": pd.to_datetime(dfp["data_vencimento"]),
+        "descricao": dfp["descricao"],
+        "parcela": dfp["parcela"],
+        "categoria": dfp.apply(_rotulo_cat, axis=1),
+        "conta": dfp["conta"].fillna(SEMC),
+        "valor": dfp["valor"].astype(float),
+    }, index=dfp.index)
+    if escopo == "nos":
+        base.insert(1, "de", dfp["dono_nome"])
+    op_cats_col = [SEM] + sorted(set(_op_cat.values()) | set(base["categoria"]) - {SEM})
+    op_contas_col = [SEMC] + sorted(set(_op_conta) | set(base["conta"]) - {SEMC})
+    cfg = {
+        "sel": st.column_config.CheckboxColumn("✓", width=36, help="Marque vários para a ação em lote"),
+        "de": st.column_config.TextColumn("De quem", disabled=True),
+        "situacao": st.column_config.SelectboxColumn("Situação", options=list(SIT.values()), width=110, required=True),
+        "data": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY", width=110),
+        "descricao": st.column_config.TextColumn("Descrição", width="medium"),
+        "parcela": st.column_config.TextColumn("Parc.", disabled=True, width=60),
+        "categoria": st.column_config.SelectboxColumn("Categoria › sub", options=op_cats_col, width="medium"),
+        "conta": st.column_config.SelectboxColumn("Conta / cartão", options=op_contas_col, width=150),
+        "valor": st.column_config.NumberColumn("Valor", format="R$ %.2f", min_value=0.0, step=0.01, width=110),
+    }
+    ordem = ["sel", "data", "descricao", "categoria", "valor"] if cel else \
+        (["sel"] + (["de"] if escopo == "nos" else []) +
+         ["situacao", "data", "descricao", "parcela", "categoria", "conta", "valor"])
+    if aba == "aberto" and (_sc := st.session_state.pop("_lanc_sem_conta", None)):
+        st.warning(f"**{len(_sc)} sem conta — não marquei como pago:** " + ", ".join(_sc[:8])
+                   + ("…" if len(_sc) > 8 else "") + ". Escolha de qual conta saiu na coluna **Conta / cartão** "
+                   "e toque de novo em ✅ Marcar pago.", icon=":material/account_balance:")
+    chave_ed = f"ed_lanc_{aba}_{ini}_{fim}_{escopo}_{len(dfp)}"
+    with st.form(f"form_{chave_ed}", border=False):
+        editado = st.data_editor(base, column_config=cfg, column_order=ordem, hide_index=True,
+                                 use_container_width=True, height=min(600, 35 * len(base) + 40), key=chave_ed)
+        mesma_desc = st.checkbox("Categoria nova vale também para os outros com a mesma descrição (todos os meses)",
+                                 key=f"md_{aba}")
+        f1_, f2_, f3_ = st.columns([1.4, 1.3, 1.2]) if not cel else (st.container(),) * 3
+        salvar = f1_.form_submit_button("💾 Salvar alterações", type="primary", use_container_width=True)
+        if aba == "aberto":
+            pagar = f2_.form_submit_button("✅ Marcar pago", use_container_width=True)
+            prever = False
+        else:
+            prever = f2_.form_submit_button("⏳ Voltar para previsto", use_container_width=True)
+            pagar = False
+        apagar = f3_.form_submit_button("🗑️ Excluir marcados", use_container_width=True)
+        a1_, a2_ = st.columns(2)
+        conf_exc = a1_.checkbox("Confirmo a exclusão dos marcados (não dá para desfazer)", key=f"ce_{aba}")
+        futuras = a2_.checkbox("Ao excluir, levar também as parcelas seguintes", key=f"fu_{aba}")
+
+    if salvar:
+        campos = ["situacao", "data", "descricao", "categoria", "conta", "valor"]
+        mud = (editado[campos].astype(str) != base[campos].astype(str)).any(axis=1)
+        alterados = editado[mud]
+        if alterados.empty:
+            st.info("Nada foi alterado na tabela.")
+            return
         n, pulados = 0, 0
         _atual = _db.consultar("select id, categoria_id, conta_id from lancamentos where dono_id = :u and id = any(:ids)",
-                               u=u["id"], ids=list(df.loc[alterados.index, "id"])).set_index("id")
+                               u=u["id"], ids=list(dfp.loc[alterados.index, "id"])).set_index("id")
         for idx, r in alterados.iterrows():
-            orig = df.loc[idx]
+            orig = dfp.loc[idx]
             if not orig["meu"] or orig["id"] not in _atual.index:
                 pulados += 1
                 continue
@@ -215,44 +224,47 @@ if salvar:
         st.session_state.pop(chave_ed, None)
         st.rerun()
 
-if pagar or prever or apagar:
-    marcados = editado[editado["sel"]]
-    escolhidos = df.loc[marcados.index]
-    ids = list(escolhidos[escolhidos["meu"]]["id"])
-    if not ids:
-        st.warning("Marque na coluna ✓ os lançamentos (seus) que quer alterar.")
-    elif apagar and not conf_exc:
-        st.warning("Marque **Confirmo a exclusão** para excluir.")
-    else:
+    if pagar or prever or apagar:
+        escolhidos = dfp.loc[editado[editado["sel"]].index]
+        meus = escolhidos[escolhidos["meu"]].copy()
+        if meus.empty:
+            st.warning("Marque na coluna ✓ os lançamentos (seus) que quer alterar.")
+            return
+        if apagar and not conf_exc:
+            st.warning("Marque **Confirmo a exclusão** para excluir.")
+            return
         if apagar:
-            repo.excluir(u, ids, parcelas_futuras=futuras)
-            msg = f"{len(ids)} lançamentos excluídos."
-        elif pagar:
-            m = escolhidos[escolhidos["meu"]].copy()
-            m["_conta_ed"] = editado.loc[m.index, "conta"]
-            ja = m[m["status"] == "pago"]
-            m = m[m["status"] != "pago"]
+            repo.excluir(u, list(meus["id"]), parcelas_futuras=futuras)
+            st.session_state["_ui_ok"] = f"{len(meus)} lançamentos excluídos."
+        elif prever:
+            repo.mudar_status(u, list(meus["id"]), "previsto")
+            st.session_state["_ui_ok"] = f"{len(meus)} voltaram para previsto (estão na aba A pagar)."
+        else:
             # conta escolhida agora na tabela (sem salvar) vale para o pagamento
-            for idx, r in m.iterrows():
-                if r["_conta_ed"] != base.loc[idx, "conta"] and r["_conta_ed"] != SEMC and r["_conta_ed"] in _op_conta:
+            meus["_conta_ed"] = editado.loc[meus.index, "conta"]
+            for idx, r in meus.iterrows():
+                if r["_conta_ed"] != base.loc[idx, "conta"] and r["_conta_ed"] in _op_conta:
                     _db.executar("update lancamentos set conta_id = :c, atualizado_em = now() where id = :i and dono_id = :u",
                                  c=_op_conta[r["_conta_ed"]], i=r["id"], u=u["id"])
-                    m.loc[idx, "conta"] = r["_conta_ed"]
-            sem_conta = m[m["conta"].isna() | (m["conta"] == SEMC)]
-            ok = m.drop(sem_conta.index)
+                    meus.loc[idx, "conta"] = r["_conta_ed"]
+            sem_conta = meus[meus["conta"].isna() | (meus["conta"] == SEMC)]
+            ok = meus.drop(sem_conta.index)
             if not ok.empty:
                 repo.mudar_status(u, list(ok["id"]), "pago")
-            partes = [f"{len(ok)} marcados como pagos."] if not ok.empty else []
-            if not ja.empty:
-                partes.append(f"{len(ja)} já estavam pagos — ignorados.")
             if not sem_conta.empty:
                 st.session_state["_lanc_sem_conta"] = list(sem_conta["descricao"])
-            st.session_state["_ui_ok"] = " ".join(partes) or "Nada para marcar."
-            st.session_state.pop(chave_ed, None)
-            st.rerun()
-        else:
-            repo.mudar_status(u, ids, "previsto")
-            msg = f"{len(ids)} lançamentos marcados como previstos."
-        st.session_state["_ui_ok"] = msg
+            st.session_state["_ui_ok"] = (f"{len(ok)} pagos — foram para a aba ✅ Pagos." if not ok.empty
+                                          else "Nada marcado como pago.")
         st.session_state.pop(chave_ed, None)
         st.rerun()
+
+
+st.caption("✏️ Edite direto na tabela (categoria, conta, situação, data, descrição, valor) — nada é gravado até "
+           "você tocar em **Salvar alterações**. A coluna ✓ marca vários para a ação em lote.")
+_aberto = df[df["status"] != "pago"]
+_pagos = df[df["status"] == "pago"]
+t_ab, t_pg = st.tabs([f"⏳ A pagar / previstos ({len(_aberto)})", f"✅ Pagos ({len(_pagos)})"])
+with t_ab:
+    _tabela(_aberto, "aberto")
+with t_pg:
+    _tabela(_pagos, "pago")
