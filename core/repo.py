@@ -209,7 +209,8 @@ def inserir_lancamentos(u, linhas: list[dict]) -> int:
 def mudar_status(u, ids: list, status: str):
     db.executar("""update lancamentos
                       set status = cast(:st as status_lancamento),
-                          data_pagamento = case when :st = 'pago' then coalesce(data_pagamento, current_date) end,
+                          data_pagamento = case when :st = 'pago'
+                                                then coalesce(data_pagamento, least(data_vencimento, current_date)) end,
                           atualizado_em = now()
                     where dono_id = :uid and id = any(cast(:ids as uuid[]))""",
                 st=status, uid=u["id"], ids=[str(i) for i in ids])
