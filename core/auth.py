@@ -44,13 +44,23 @@ def _checar_configuracao():
 
 
 def _tela_login():
-    st.markdown("<div style='height:12vh'></div>", unsafe_allow_html=True)
-    _, meio, _ = st.columns([1, 2, 1])
-    with meio:
-        st.title("💰 Finanças")
-        st.caption("Controle financeiro do casal — cada um com o seu, juntos no que quiserem.")
-        st.button("Entrar com Google", type="primary", icon=":material/login:",
-                  on_click=st.login, use_container_width=True)
+    import base64
+    from pathlib import Path
+    ico = base64.b64encode((Path(__file__).parent.parent / "static" / "icone-512.png").read_bytes()).decode()
+    st.markdown("""<style>
+[data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"], .st-key-tabbar {display: none !important;}
+.st-key-login {max-width: 380px; margin: 9vh auto 0; background: #fff; border-radius: 28px; padding: 36px 28px 28px;
+  box-shadow: 0 18px 50px rgba(17,24,39,.10); text-align: center;}
+.st-key-login [data-testid="stMarkdownContainer"] {text-align: center;}
+.ui-login-ico {display: block; margin: 0 auto; width: 96px; height: 96px; border-radius: 26px; box-shadow: 0 10px 28px rgba(19,78,72,.35);}
+.ui-login-t {font-size: 1.9rem; font-weight: 900; color: #111827; margin: 18px 0 2px; letter-spacing: -.5px;}
+.ui-login-s {font-size: .95rem; color: #5B6472; margin-bottom: 24px;}
+</style>""", unsafe_allow_html=True)
+    with st.container(key="login"):
+        st.markdown(f"<img class='ui-login-ico' src='data:image/png;base64,{ico}' alt=''>"
+                    "<div class='ui-login-t'>Finanças</div>"
+                    "<div class='ui-login-s'>O dinheiro de vocês, em dia.</div>", unsafe_allow_html=True)
+        st.button("Entrar com Google", type="primary", icon=":material/login:", on_click=st.login, width="stretch")
     st.stop()
 
 
