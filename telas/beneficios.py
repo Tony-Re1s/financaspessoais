@@ -113,5 +113,3 @@ for c in ct.itertuples():
                 st.rerun()
     st.divider()
 
-st.caption("💡 O cartão é um só (híbrido)? Na **Caixa de entrada**, escolha **VR/VA** e depois qual dos dois: "
-           "compras no VR entram nos gastos; no VA (fora dos gastos) só baixam o saldo.")

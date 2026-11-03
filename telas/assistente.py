@@ -85,5 +85,3 @@ if pergunta:
     st.session_state["_ia_hist"] = hist
     st.session_state["_ia_chat"].append({"role": "assistant", "texto": texto, "fontes": usadas})
 
-st.caption("As respostas são análises para te ajudar a planejar — confira os números nas telas do app. "
-           "A IA só lê os dados; não grava nada.")

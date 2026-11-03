@@ -16,7 +16,7 @@ if msg := st.session_state.pop("_ok_conta", None):
 df = repo.contas(u, so_ativas=False)
 
 if df.empty:
-    st.info("Nenhuma conta ainda. Cadastre abaixo — ou rode a migração da planilha, que já cria os cartões.")
+    st.info("Nenhuma conta ainda.")
 if not df.empty:
     vis = df.copy()
     vis["tipo"] = vis["tipo"].map(TIPOS_CONTA)
@@ -28,80 +28,97 @@ def _int(v):
     return None if v is None or pd.isna(v) else int(v)
 
 
+def _incompleto(r) -> bool:
+    """Cartão sem vencimento ou sem conta que paga a fatura: a fatura não entra certinho no fluxo."""
+    return r.tipo == "cartao_credito" and (pd.isna(r.dia_vencimento) or pd.isna(r.conta_pagamento_id))
+
+
+def _n(x):
+    return None if x is None or (not isinstance(x, str) and pd.isna(x)) else x
+
+
 def _cadastro(escolha):
     atual = df[df["id"] == escolha].iloc[0].to_dict() if escolha else {}
-    with st.form(f"conta_{escolha}", border=True):
-        c1, c2, c3 = st.columns(3)
-        nome = c1.text_input("Nome", atual.get("nome", ""), placeholder="Ex.: Latam Black")
+    ch = f"conta_{escolha or 'nova'}"
+    cor_atual = atual.get("cor") if isinstance(atual.get("cor"), str) and atual.get("cor") else None
+    r = _ui.rascunho(ch, dict(
+        nome=atual.get("nome", ""), tipo=atual.get("tipo", "conta_corrente"), instituicao=atual.get("instituicao") or "",
+        fech=_int(atual.get("dia_fechamento")) or 0, venc=_int(atual.get("dia_vencimento")) or 0,
+        limite=float(atual.get("limite") or 0), deb=_n(atual.get("conta_debito_id")), pag=_n(atual.get("conta_pagamento_id")),
+        visib=atual.get("visibilidade", "privado"), ativa=bool(atual.get("ativa", True)),
+        cor_propria=cor_atual is not None,
+        cor=cor_atual or _ui.banco(atual.get("nome", ""), atual.get("instituicao"))["c1"]))
+    cartao = r["tipo"] == "cartao_credito"
+    passos = ["Básico", "Cartão", "Opções"] if cartao else ["Básico", "Opções"]
+    i = _ui.etapas(ch, passos)
+    etapa = passos[i]
+    bancos = df[df["tipo"].isin(["conta_corrente", "poupanca", "carteira"]) & (df["id"] != escolha)]
+
+    if etapa == "Básico":
+        _ui.campo(r, ch, "nome", st.text_input, "Nome", placeholder="Ex.: Latam Black")
         tipos = list(TIPOS_CONTA)
-        tipo = c2.selectbox("Tipo", tipos, index=tipos.index(atual.get("tipo", "conta_corrente")),
-                            format_func=TIPOS_CONTA.get)
-        instituicao = c3.text_input("Instituição", atual.get("instituicao") or "", placeholder="Itaú, Nubank…")
-
-        st.caption("Só para cartão de crédito:")
-        c1, c2, c3 = st.columns(3)
-        fech = c1.number_input("Dia de fechamento", 0, 31, _int(atual.get("dia_fechamento")) or 0,
-                               help="0 = não sei (o app assume 7 dias antes do vencimento)")
-        venc = c2.number_input("Dia de vencimento", 0, 31, _int(atual.get("dia_vencimento")) or 0)
-        limite = c3.number_input("Limite (R$)", 0.0, value=float(atual.get("limite") or 0), step=500.0)
-        bancos = df[df["tipo"].isin(["conta_corrente", "poupanca", "carteira"]) & (df["id"] != escolha)]
-        op_deb = {None: "— não tem função débito"} | {r.id: r.nome for r in bancos.itertuples()}
-        deb_atual = atual.get("conta_debito_id")
-        deb_atual = None if deb_atual is None or pd.isna(deb_atual) else deb_atual
+        _ui.campo(r, ch, "tipo", st.selectbox, "Tipo", tipos, format_func=TIPOS_CONTA.get)
+        _ui.campo(r, ch, "instituicao", st.text_input, "Instituição", placeholder="Itaú, Nubank…")
+    elif etapa == "Cartão":
         c1, c2 = st.columns(2)
-        conta_deb = c1.selectbox("Função débito sai da conta", list(op_deb), format_func=op_deb.get,
-                                 index=list(op_deb).index(deb_atual) if deb_atual in op_deb else 0,
-                                 help="Se este cartão também passa no débito, de qual conta corrente sai o dinheiro. "
-                                      "Usado pela Caixa de entrada quando você escolhe Débito.")
-        op_pag = {None: "— não definida"} | {r.id: r.nome for r in bancos.itertuples()}
-        pag_atual = atual.get("conta_pagamento_id")
-        pag_atual = None if pag_atual is None or pd.isna(pag_atual) else pag_atual
-        conta_pag = c2.selectbox("Fatura paga pela conta", list(op_pag), format_func=op_pag.get,
-                                 index=list(op_pag).index(pag_atual) if pag_atual in op_pag else 0,
-                                 help="A fatura sai desta conta corrente no vencimento (entra no fluxo de caixa).")
-
-        c1, c2 = st.columns(2)
+        _ui.campo(r, ch, "fech", c1.number_input, "Fecha dia", 0, 31,
+                  help="0 = não sei (o app assume 7 dias antes do vencimento)")
+        _ui.campo(r, ch, "venc", c2.number_input, "Vence dia", 0, 31)
+        _ui.campo(r, ch, "limite", st.number_input, "Limite (R$)", 0.0, step=500.0)
+        op_pag = {None: "— não definida"} | {b.id: b.nome for b in bancos.itertuples()}
+        if r["pag"] not in op_pag:
+            st.session_state.pop(f"{ch}__pag", None); r["pag"] = None
+        _ui.campo(r, ch, "pag", st.selectbox, "Fatura paga pela conta", list(op_pag), format_func=op_pag.get,
+                  help="A fatura sai desta conta corrente no vencimento (entra no fluxo de caixa).")
+        op_deb = {None: "— não tem função débito"} | {b.id: b.nome for b in bancos.itertuples()}
+        if r["deb"] not in op_deb:
+            st.session_state.pop(f"{ch}__deb", None); r["deb"] = None
+        _ui.campo(r, ch, "deb", st.selectbox, "Função débito sai da conta", list(op_deb), format_func=op_deb.get,
+                  help="Se este cartão também passa no débito, de qual conta corrente sai o dinheiro. "
+                       "Usado pela Caixa de entrada quando você escolhe Débito.")
+    else:
+        if not cartao:
+            _ui.campo(r, ch, "limite", st.number_input, "Limite (R$)", 0.0, step=500.0,
+                      help="Cheque especial, se tiver.")
         vis_keys = list(VISIBILIDADES)
-        visib = c1.selectbox("Quem vê os lançamentos desta conta", vis_keys,
-                             index=vis_keys.index(atual.get("visibilidade", "privado")),
-                             format_func=VISIBILIDADES.get)
-        ativa = c2.toggle("Conta ativa", value=bool(atual.get("ativa", True)))
-
-        from telas import _ui
-        cor_atual = atual.get("cor") if isinstance(atual.get("cor"), str) and atual.get("cor") else None
-        padrao = _ui.banco(atual.get("nome", ""), atual.get("instituicao"))["c1"]
+        _ui.campo(r, ch, "visib", st.selectbox, "Quem vê os lançamentos desta conta", vis_keys,
+                  format_func=VISIBILIDADES.get)
+        _ui.campo(r, ch, "ativa", st.toggle, "Conta ativa")
         c1, c2 = st.columns([1, 2], vertical_alignment="bottom")
-        cor_propria = c1.toggle("Escolher a cor", value=cor_atual is not None,
-                                help="Desligado: usa a cor do banco/cartão. Ligado: usa a cor que você escolher.")
-        cor = c2.color_picker("Cor do cartão/conta", cor_atual or padrao)
+        _ui.campo(r, ch, "cor_propria", c1.toggle, "Escolher a cor",
+                  help="Desligado: usa a cor do banco/cartão. Ligado: usa a cor que você escolher.")
+        _ui.campo(r, ch, "cor", c2.color_picker, "Cor do cartão/conta")
 
-        if st.form_submit_button("Salvar", type="primary"):
-            if not nome.strip():
-                st.error("Dê um nome para a conta.")
-            else:
-                repo.salvar_conta(u, dict(nome=nome.strip(), tipo=tipo, instituicao=instituicao or None,
-                                          dia_fechamento=fech or None, dia_vencimento=venc or None,
-                                          limite=limite or None, visibilidade=visib, ativa=ativa,
-                                          conta_debito_id=conta_deb if tipo == "cartao_credito" else None,
-                                          conta_pagamento_id=conta_pag if tipo == "cartao_credito" else None,
-                                          cor=cor if cor_propria else None,
-                                          saldo_inicial=atual.get("saldo_inicial"),
-                                          data_saldo_inicial=atual.get("data_saldo_inicial")),
-                                  conta_id=escolha)
-                st.session_state["_ok_conta"] = f"Conta **{nome}** salva."
-                st.rerun()
+    if _ui.etapas_botoes(ch, len(passos), [("nome", "o nome")] if etapa == "Básico" else []):
+        if not str(r["nome"] or "").strip():
+            st.error("Dê um nome para a conta.")
+        else:
+            cartao = r["tipo"] == "cartao_credito"
+            repo.salvar_conta(u, dict(nome=r["nome"].strip(), tipo=r["tipo"], instituicao=r["instituicao"] or None,
+                                      dia_fechamento=r["fech"] or None, dia_vencimento=r["venc"] or None,
+                                      limite=r["limite"] or None, visibilidade=r["visib"], ativa=r["ativa"],
+                                      conta_debito_id=r["deb"] if cartao else None,
+                                      conta_pagamento_id=r["pag"] if cartao else None,
+                                      cor=r["cor"] if r["cor_propria"] else None,
+                                      saldo_inicial=atual.get("saldo_inicial"),
+                                      data_saldo_inicial=atual.get("data_saldo_inicial")),
+                              conta_id=escolha)
+            _ui.rascunho_limpar(ch)
+            st.session_state["_ok_conta"] = f"Conta **{r['nome'].strip()}** salva."
+            st.rerun()
 
     if escolha:
         n_lanc = repo.qtd_lancamentos_conta(u, escolha)
-        with st.popover("🗑️ Excluir conta"):
+        with st.popover("🗑️ Excluir conta", width="stretch"):
             if n_lanc:
                 st.caption(f"Esta conta tem **{n_lanc} lançamentos**. Excluir apaga a conta e deixa os lançamentos "
                            "sem conta. Se só não usa mais, prefira desligar **Conta ativa** (some das listas, "
                            "mas o histórico fica).")
             else:
                 st.caption("Conta sem lançamentos — pode excluir sem perder nada.")
-            if st.button("Excluir de vez", type="primary"):
+            if st.button("Excluir de vez", type="primary", key=f"{ch}__exc"):
                 repo.excluir_conta(u, escolha)
+                _ui.rascunho_limpar(ch)
                 st.session_state["_ok_conta"] = "Conta excluída."
                 st.rerun()
 
@@ -113,6 +130,7 @@ def _ficha(escolha):
 
 if cel:
     if st.button("Nova conta ou cartão", icon=":material/add:", type="primary", width="stretch", key="nova_conta"):
+        _ui.rascunho_limpar("conta_nova")
         _ficha(None)
 if cel and not df.empty:
     ordem = {"conta_corrente": 0, "carteira": 1, "poupanca": 2, "cartao_credito": 3}
@@ -127,7 +145,9 @@ if cel and not df.empty:
             lim = float(r.limite) if pd.notna(r.limite) and r.limite else 0
             if _ui.linha(f"c_{r.id}", f"<div class='sel'>{_ui.selo(r.nome, r.instituicao, 42)}</div>", r.nome,
                          " · ".join(sub), valor=brl(lim) if lim else "",
-                         chip="" if r.ativa else "Inativa", chip_cls="mute"):
+                         chip=("Completar" if _incompleto(r) else "") if r.ativa else "Inativa",
+                         chip_cls="warn" if r.ativa else "mute"):
+                _ui.rascunho_limpar(f"conta_{r.id}")
                 _ficha(r.id)
 if not cel and not df.empty:
     cols = ["nome", "tipo", "instituicao", "dia_fechamento", "dia_vencimento", "limite", "visibilidade", "ativa"]
@@ -141,5 +161,3 @@ if not cel:
     op = {None: "➕ Nova conta"} | {r.id: f"Editar: {r.nome}" for r in df.itertuples()}
     _cadastro(st.selectbox("O que fazer", list(op), format_func=op.get))
 
-st.caption("Saldos: em **Contas correntes** (informar saldo real) e **Patrimônio** (FGTS, financiamento). "
-           "Aplicações: em **Investimentos**.")

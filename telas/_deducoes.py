@@ -62,8 +62,6 @@ def _sugestoes(u, ano, df):
     if df.empty:
         st.caption("Nada novo nos lançamentos do ano. Pagou algo fora do app? Use ➕ Recibo / nota.")
         return
-    st.caption("O app achou estes pagamentos do ano. Marque o que entra, ajuste o valor dedutível "
-               "(ex.: só a mensalidade da escola) e o beneficiário, e inclua.")
     base = pd.DataFrame({
         "incluir": df["veredito"] == "sim",
         "data": pd.to_datetime(df["data"]).dt.date,
@@ -190,8 +188,6 @@ def _confirmadas(u, ano, df):
 
 
 def _adicionar(u, ano):
-    st.caption("Para o que não passou pelo app (ou para conferir a nota que a escola/clínica mandou). "
-               "Com a chave da IA configurada, o app lê o PDF/foto e preenche sozinho.")
     arq = st.file_uploader("Recibo ou nota fiscal", type=["pdf", "jpg", "jpeg", "png", "heic"], key=f"ded_novo_{ano}")
     lido = st.session_state.get("_ded_lido") or {}
     if arq and ia.chave() and st.button("✨ Ler com IA", key="ded_ler"):

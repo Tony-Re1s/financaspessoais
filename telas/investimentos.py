@@ -21,6 +21,10 @@ caixa = contas[contas["tipo"].isin(["conta_corrente", "poupanca", "carteira"])]
 df = inv.ativos(u)
 
 
+LIQUIDEZ = ["Diária", "No vencimento", "D+1", "D+30", "D+90", "Outra"]
+INDEXADORES = ["", "CDI", "IPCA", "SELIC", "PRE", "Variável"]
+
+
 def _cadastro(escolha):
     a = df[df["id"] == escolha].iloc[0].to_dict() if escolha else {}
 
@@ -28,57 +32,69 @@ def _cadastro(escolha):
         x = a.get(k)
         return padrao if x is None or (not isinstance(x, str) and pd.isna(x)) else x
 
+    op_i = {None: "➕ Nova instituição…"} | dict(zip(inst["id"], inst["nome"]))
+    ids_i = list(op_i)
+    ch = f"inv_{escolha or 'nova'}"
+    r = _ui.rascunho(ch, dict(
+        conta_id=a.get("conta_id") if a.get("conta_id") in ids_i else (ids_i[1] if len(ids_i) > 1 else None),
+        nova_inst="", nome=_v("nome", ""), valor_ini=0.0, aplicado_ini=0.0,
+        classe=_v("classe", "renda_fixa"), indexador=_v("indexador", "") or "", taxa=float(_v("taxa", 0.0)),
+        data_ap=_v("data_aplicacao", None), venc=_v("vencimento", None),
+        liq=_v("liquidez", "Diária") if _v("liquidez", "Diária") in LIQUIDEZ else "Outra",
+        vinc=_v("vinculo_descricao", "") or "", ativo=bool(_v("ativo", True))))
+    passos = ["Onde", "Como rende", "Extras"]
+    i = _ui.etapas(ch, passos)
 
-    with st.form(f"ativo_{escolha}"):
-        c1, c2 = st.columns(2)
-        op_i = {None: "➕ Nova instituição…"} | dict(zip(inst["id"], inst["nome"]))
-        ids_i = list(op_i)
-        conta_id = c1.selectbox("Banco / corretora", ids_i, format_func=op_i.get,
-                                index=ids_i.index(a.get("conta_id")) if a.get("conta_id") in ids_i else (1 if len(ids_i) > 1 else 0))
-        nova_inst = c2.text_input("Nome da nova instituição", placeholder="Ex.: XP, Nubank Caixinhas, Itaú Personnalité",
-                                  help="Só se escolheu ➕ Nova instituição")
-        nome = st.text_input("Aplicação", _v("nome", ""), placeholder="Ex.: CDB Inter 110% CDI, Tesouro IPCA+ 2035")
-        c1, c2, c3 = st.columns(3)
-        classes = list(inv.CLASSES)
-        classe = c1.selectbox("Tipo", classes, format_func=inv.CLASSES.get,
-                              index=classes.index(_v("classe", "renda_fixa")))
-        indexador = c2.selectbox("Rende por", ["", "CDI", "IPCA", "SELIC", "PRE", "Variável"],
-                                 index=["", "CDI", "IPCA", "SELIC", "PRE", "Variável"].index(_v("indexador", "") or ""))
-        taxa = c3.number_input("Taxa", 0.0, value=float(_v("taxa", 0.0)), step=1.0, format="%.2f",
-                               help="Ex.: 110 (% do CDI) ou 6,5 (IPCA + 6,5%)")
-        c1, c2, c3 = st.columns(3)
-        data_ap = c1.date_input("Aplicado em", _v("data_aplicacao", None), format="DD/MM/YYYY")
-        venc = c2.date_input("Vencimento", _v("vencimento", None), format="DD/MM/YYYY")
-        liq = c3.selectbox("Liquidez", ["Diária", "No vencimento", "D+1", "D+30", "D+90", "Outra"],
-                           index=["Diária", "No vencimento", "D+1", "D+30", "D+90", "Outra"].index(_v("liquidez", "Diária"))
-                           if _v("liquidez", "Diária") in ["Diária", "No vencimento", "D+1", "D+30", "D+90", "Outra"] else 5)
+    if i == 0:
+        _ui.campo(r, ch, "conta_id", st.selectbox, "Banco / corretora", ids_i, format_func=op_i.get)
+        if r["conta_id"] is None:
+            _ui.campo(r, ch, "nova_inst", st.text_input, "Nome da nova instituição",
+                      placeholder="Ex.: XP, Nubank Caixinhas, Itaú Personnalité")
+        _ui.campo(r, ch, "nome", st.text_input, "Aplicação", placeholder="Ex.: CDB Inter 110% CDI, Tesouro IPCA+ 2035")
         if not escolha:
             c1, c2 = st.columns(2)
-            valor_ini = c1.number_input("Quanto tem hoje (R$)", 0.0, step=100.0, format="%.2f")
-            aplicado_ini = c2.number_input("Quanto você aplicou (R$)", 0.0, step=100.0, format="%.2f",
-                                           help="Para calcular o ganho. Se não souber, deixe igual ao valor de hoje.")
-        vinc = st.text_input("Pagamento mensal que alimenta esta aplicação (opcional)", _v("vinculo_descricao", "") or "",
-                             placeholder="Ex.: CAP PIC — a descrição do débito no extrato",
-                             help="Cada lançamento pago com esta descrição continua como despesa no fluxo e também "
-                                  "soma no saldo desta aplicação (e no Patrimônio).")
-        ativo = st.toggle("Ativa", value=bool(_v("ativo", True)))
-        ok = st.form_submit_button("Salvar", type="primary")
+            _ui.campo(r, ch, "valor_ini", c1.number_input, "Quanto tem hoje (R$)", 0.0, step=100.0, format="%.2f")
+            _ui.campo(r, ch, "aplicado_ini", c2.number_input, "Quanto você aplicou (R$)", 0.0, step=100.0,
+                      format="%.2f", help="Para calcular o ganho. Se não souber, deixe igual ao valor de hoje.")
+    elif i == 1:
+        _ui.campo(r, ch, "classe", st.selectbox, "Tipo", list(inv.CLASSES), format_func=inv.CLASSES.get)
+        c1, c2 = st.columns(2)
+        _ui.campo(r, ch, "indexador", c1.selectbox, "Rende por", INDEXADORES)
+        _ui.campo(r, ch, "taxa", c2.number_input, "Taxa", 0.0, step=1.0, format="%.2f",
+                  help="Ex.: 110 (% do CDI) ou 6,5 (IPCA + 6,5%)")
+        c1, c2 = st.columns(2)
+        _ui.campo(r, ch, "data_ap", c1.date_input, "Aplicado em", format="DD/MM/YYYY")
+        _ui.campo(r, ch, "venc", c2.date_input, "Vencimento", format="DD/MM/YYYY")
+        _ui.campo(r, ch, "liq", st.selectbox, "Liquidez", LIQUIDEZ)
+    else:
+        _ui.campo(r, ch, "vinc", st.text_input, "Pagamento mensal que alimenta esta aplicação (opcional)",
+                  placeholder="Ex.: CAP PIC — a descrição do débito no extrato",
+                  help="Cada lançamento pago com esta descrição continua como despesa no fluxo e também "
+                       "soma no saldo desta aplicação (e no Patrimônio).")
+        _ui.campo(r, ch, "ativo", st.toggle, "Ativa")
 
-    if ok:
-        if not nome.strip() or (conta_id is None and not nova_inst.strip()):
+    if _ui.etapas_botoes(ch, len(passos), [("nome", "a aplicação")] if i == 0 else []):
+        nome, nova_inst, conta_id = str(r["nome"] or "").strip(), str(r["nova_inst"] or "").strip(), r["conta_id"]
+        if not nome or (conta_id is None and not nova_inst):
             st.error("Preencha a aplicação e a instituição.")
         else:
             if conta_id is None:
-                repo.salvar_conta(u, dict(nome=nova_inst.strip(), tipo="previdencia" if classe.startswith("previdencia")
-                                          else "investimento", visibilidade="privado", ativa=True))
-                conta_id = repo.contas(u).set_index("nome").loc[nova_inst.strip(), "id"]
-            aid = inv.salvar_ativo(dict(conta_id=conta_id, nome=nome.strip(), classe=classe, indexador=indexador or None,
-                                        taxa=taxa or None, data_aplicacao=data_ap, vencimento=venc, liquidez=liq,
-                                        ativo=ativo, vinculo_descricao=vinc), escolha)
-            if not escolha and (valor_ini or aplicado_ini):
-                inv.movimentar(u, aid, data_ap or hoje(), "aporte", aplicado_ini or valor_ini)
-                if valor_ini:
-                    inv.informar_posicao(aid, hoje(), valor_ini)
+                todas = repo.contas(u, so_ativas=False)
+                ja = todas[todas["nome"].str.strip().str.lower() == nova_inst.lower()]
+                if ja.empty:
+                    repo.salvar_conta(u, dict(nome=nova_inst, tipo="previdencia" if r["classe"].startswith("previdencia")
+                                              else "investimento", visibilidade="privado", ativa=True))
+                    todas = repo.contas(u, so_ativas=False)
+                    ja = todas[todas["nome"] == nova_inst]
+                conta_id = ja.iloc[0]["id"]
+            aid = inv.salvar_ativo(dict(conta_id=conta_id, nome=nome, classe=r["classe"], indexador=r["indexador"] or None,
+                                        taxa=r["taxa"] or None, data_aplicacao=r["data_ap"], vencimento=r["venc"],
+                                        liquidez=r["liq"], ativo=r["ativo"], vinculo_descricao=r["vinc"]), escolha)
+            if not escolha and (r["valor_ini"] or r["aplicado_ini"]):
+                inv.movimentar(u, aid, r["data_ap"] or hoje(), "aporte", r["aplicado_ini"] or r["valor_ini"])
+                if r["valor_ini"]:
+                    inv.informar_posicao(aid, hoje(), r["valor_ini"])
+            _ui.rascunho_limpar(ch)
             st.session_state["_ok_inv"] = f"**{nome}** salva."
             st.rerun()
 
@@ -89,10 +105,11 @@ def _cadastro(escolha):
             st.dataframe(em_reais(h), hide_index=True, use_container_width=True,
                          column_config={"data": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
                                         "tipo": "Tipo", "valor": col_rs()})
-        with st.popover("🗑️ Excluir aplicação"):
+        with st.popover("🗑️ Excluir aplicação", width="stretch"):
             st.caption("Apaga a aplicação e o histórico dela.")
-            if st.button("Excluir de vez", type="primary"):
+            if st.button("Excluir de vez", type="primary", key=f"{ch}__exc"):
                 inv.excluir(escolha)
+                _ui.rascunho_limpar(ch)
                 st.session_state["_ok_inv"] = "Aplicação excluída."
                 st.rerun()
 
@@ -104,8 +121,7 @@ def _ficha(escolha):
 
 # --- resumo ---------------------------------------------------------------------------------
 if df.empty:
-    st.info("Nenhuma aplicação cadastrada ainda. Use **Nova aplicação** abaixo — ou me mande a lista "
-            "(nome, banco/corretora, tipo, quanto tem hoje) que eu cadastro para você.")
+    st.info("Nenhuma aplicação ainda.")
 else:
     total, aplicado = df["valor_atual"].sum(), df["aplicado"].sum()
     cartoes_kpi([("Total investido hoje", brl(total)), ("Aplicado (aportes − resgates)", brl(aplicado)),
@@ -127,6 +143,7 @@ else:
                 if _ui.linha(f"i_{r.id}", f"<div class='sel'>{_ui.selo(r.instituicao, r.instituicao, 42)}</div>",
                              r.nome, sub, valor=brl(r.valor_atual),
                              chip=f"{'+' if g >= 0 else '−'} {brl(abs(g))}{pct}", chip_cls="ok" if g >= 0 else "bad"):
+                    _ui.rascunho_limpar(f"inv_{r.id}")
                     _ficha(r.id)
     itens = []
     for r in v.sort_values("valor_atual", ascending=False).itertuples():
@@ -167,7 +184,6 @@ else:
 # --- atualizar posições em lote ----------------------------------------------------------------
 if not df.empty:
     with st.expander("🔄 Atualizar saldos de hoje (todas de uma vez)"):
-        st.caption("Copie o saldo bruto que aparece no banco/corretora. Deixe em branco o que não mudou.")
         ed = st.data_editor(pd.DataFrame({"id": df["id"], "aplicacao": df["instituicao"] + " · " + df["nome"],
                                           "atual": df["valor_atual"].astype(float), "novo": None}),
                             hide_index=True, use_container_width=True, key="ed_pos",
@@ -207,6 +223,7 @@ if not df.empty:
 # --- cadastro -----------------------------------------------------------------------------------
 if cel:
     if st.button("Nova aplicação", icon=":material/add:", type="primary", width="stretch", key="nova_inv"):
+        _ui.rascunho_limpar("inv_nova")
         _ficha(None)
 else:
     st.divider()

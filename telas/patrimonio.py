@@ -137,7 +137,6 @@ if not outras.empty:
                                        "tipo": st.column_config.TextColumn("Tipo", disabled=True),
                                        "atual": st.column_config.NumberColumn("No app", format="R$ %.2f", disabled=True),
                                        "novo": st.column_config.NumberColumn("Saldo hoje", format="R$ %.2f")})
-    st.caption("FGTS: veja no app do FGTS. Financiamento: saldo devedor (o app trata como dívida).")
     if st.button("Salvar saldos", key="salvar_saldos_pat"):
         n = 0
         for r in ed.itertuples():

@@ -328,9 +328,6 @@ def _lista_celular(dfp: pd.DataFrame, aba: str):
 
 _aberto = df[df["status"] != "pago"]
 _pagos = df[df["status"] == "pago"]
-if not cel:
-    st.caption("✏️ Edite direto na tabela (categoria, conta, situação, data, descrição, valor) — nada é gravado até "
-               "você tocar em **Salvar alterações**. A coluna ✓ marca vários para a ação em lote.")
 t_ab, t_pg = st.tabs([f"⏳ A pagar ({len(_aberto)})", f"✅ Pagos ({len(_pagos)})"])
 with t_ab:
     _lista_celular(_aberto, "aberto") if cel else _tabela(_aberto, "aberto")

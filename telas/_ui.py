@@ -35,6 +35,77 @@ def render(s: str):
     st.markdown(re.sub(r"\n\s*", "", s), unsafe_allow_html=True)
 
 
+# --- cadastro em etapas ①②③ -------------------------------------------------------------------
+# Cada campo guarda o valor num rascunho (session_state), então trocar de etapa não perde nada.
+NUM = "①②③④⑤"
+
+
+def rascunho(ch: str, inicial: dict) -> dict:
+    return st.session_state.setdefault(f"{ch}__r", dict(inicial))
+
+
+def rascunho_limpar(ch: str):
+    for k in [k for k in st.session_state if str(k).startswith(f"{ch}__")]:
+        del st.session_state[k]
+
+
+def campo(r: dict, ch: str, nome: str, widget, *args, **kw):
+    """Desenha o widget com o valor do rascunho e devolve o valor (já gravado no rascunho)."""
+    k = f"{ch}__{nome}"
+    nada = "__nada__"
+    troca = getattr(widget, "__name__", "") == "selectbox" and len(args) > 1 and None in list(args[1])
+    if troca:   # selectbox trata None como "nada escolhido": usa um marcador para a opção "nenhuma"
+        ff = kw.get("format_func", str)
+        kw["format_func"] = lambda o: ff(None if o == nada else o)
+        args = (args[0], [nada if o is None else o for o in args[1]]) + tuple(args[2:])
+    if k not in st.session_state:
+        v0 = r.get(nome)
+        st.session_state[k] = nada if troca and v0 is None else v0
+    v = widget(*args, key=k, **kw)
+    r[nome] = None if v == nada else v
+    return r[nome]
+
+
+def etapas(ch: str, nomes: list[str]) -> int:
+    """Cabeçalho ① ② ③ e a etapa atual (0, 1, 2…)."""
+    k = f"{ch}__passo"
+    i = min(st.session_state.setdefault(k, 0), len(nomes) - 1)
+    st.session_state[k] = i
+    render("<div class='ui-etapas'>" + "".join(
+        f"<span class='{'on' if j == i else ('feito' if j < i else '')}'>{NUM[j]} {esc(n)}</span>"
+        for j, n in enumerate(nomes)) + "</div>")
+    return i
+
+
+def _ir(ch, para, obrig):
+    falta = [rot for campo_, rot in obrig if not st.session_state.get(f"{ch}__{campo_}")]
+    if falta and para > st.session_state.get(f"{ch}__passo", 0):
+        st.session_state[f"{ch}__erro"] = "Preencha " + " e ".join(falta) + "."
+        return
+    st.session_state.pop(f"{ch}__erro", None)
+    st.session_state[f"{ch}__passo"] = para
+
+
+def etapas_botoes(ch: str, n: int, obrig: list[tuple[str, str]] = ()) -> bool:
+    """Voltar / Próximo e o botão de salvar. True quando tocou em salvar.
+    obrig = campos que precisam estar preenchidos para avançar desta etapa: [(campo, rótulo)]."""
+    i = st.session_state.get(f"{ch}__passo", 0)
+    if erro := st.session_state.get(f"{ch}__erro"):
+        st.error(erro)
+    ultimo = i >= n - 1
+    with st.container(key=f"etbt_{ch}"):
+        c1, c2 = st.columns(2)
+        if i > 0:
+            c1.button("Voltar", key=f"{ch}__bv", width="stretch", icon=":material/arrow_back:",
+                      on_click=_ir, args=(ch, i - 1, []))
+        if not ultimo:
+            c2.button("Próximo", key=f"{ch}__bp", type="primary", width="stretch", icon=":material/arrow_forward:",
+                      on_click=_ir, args=(ch, i + 1, list(obrig)))
+            return st.button("Salvar e completar depois", key=f"{ch}__bs", type="tertiary", width="stretch",
+                             icon=":material/bookmark:")
+        return c2.button("Salvar", key=f"{ch}__bs", type="primary", width="stretch", icon=":material/save:")
+
+
 def linha(chave: str, esquerda: str, titulo: str, sub: str = "", valor: str = "", chip: str = "",
           chip_cls: str = "ok", valor_cls: str = "") -> bool:
     """Linha tocável (celular): a linha inteira é um botão invisível. Devolve True quando tocada.
@@ -294,6 +365,9 @@ html, body, [class*="css"], .stApp, button, input, textarea, select {font-family
 .chip.ok {background: #DDF5EE; color: #0B7A66;} .chip.warn {background: #FDEBD3; color: #A2490A;}
 .chip.bad {background: #FDE2E2; color: #C81E1E;} .chip.mute {background: #E5E7EB; color: #5B6472;}
 .ui-lrow .v.neg {color: #C81E1E;} .ui-lrow .sel {flex-shrink: 0; display: flex;}
+.ui-etapas {display: flex; gap: 6px; margin: 0 0 14px; flex-wrap: wrap;}
+.ui-etapas span {font-size: .78rem; font-weight: 800; padding: 6px 12px; border-radius: 99px; background: #E5E7EB; color: #5B6472;}
+.ui-etapas span.on {background: #111827; color: #fff;} .ui-etapas span.feito {background: #DDF5EE; color: #0B7A66;}
 .ui-ficha-topo {text-align: center; margin: -6px 0 12px;}
 .ui-ficha-topo .v {font-size: 2rem; font-weight: 900; color: #111827; letter-spacing: -.5px;}
 .ui-ficha-topo .d {font-weight: 800; font-size: 1rem;} .ui-ficha-topo .s {font-size: .82rem; color: #5B6472;}

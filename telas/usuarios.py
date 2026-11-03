@@ -13,9 +13,6 @@ if not u.get("admin"):
     st.error("Só o administrador acessa esta tela.")
     st.stop()
 
-st.caption(f"Você é o administrador ({', '.join(acesso.admins())}): pode tudo e decide o que cada pessoa "
-           "convidada pode usar. Os **dados** continuam separados — cada um só vê o próprio e o que o outro "
-           "compartilhar (em *Casal e privacidade*).")
 
 if msg := st.session_state.pop("_ok_usu", None):
     st.success(msg, icon=":material/check_circle:")

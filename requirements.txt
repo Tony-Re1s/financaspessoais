@@ -9,4 +9,4 @@ altair>=5
 pillow-heif>=0.18
 xlrd>=2.0
 pdfplumber>=0.11
-# 2026-11-03: força o reinício do app (fase 2 UX: toque nas linhas)
+# 2026-11-03: força o reinício do app (fase 3 UX: cadastros em etapas)

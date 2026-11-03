@@ -119,6 +119,18 @@ def atencao(u, n_caixa: int = 0) -> list[dict]:
     except Exception:  # noqa: BLE001
         pass
 
+    # cadastros salvos para completar depois: cartão sem vencimento ou sem conta que paga a fatura
+    try:
+        c = repo.contas(u)
+        inc = c[(c["tipo"] == "cartao_credito") & (c["dia_vencimento"].isna() | c["conta_pagamento_id"].isna())]
+        if not inc.empty:
+            n = len(inc)
+            itens.append({"nivel": "info", "pagina": "telas/contas.py",
+                          "titulo": f"{n} cart{'ões' if n > 1 else 'ão'} para completar o cadastro",
+                          "sub": ", ".join(inc["nome"].head(3)) + " · vencimento ou conta que paga a fatura"})
+    except Exception:  # noqa: BLE001
+        pass
+
     # deduções do IR sem comprovante
     try:
         from core import deducoes

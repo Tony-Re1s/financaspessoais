@@ -10,8 +10,6 @@ u = usuario()
 _ui.titulo("Importar planilha", "📄")
 
 st.subheader("Planilha de compromissos")
-st.caption("A `Compromissos_Financeiros.xlsx` (aba **Compromissos**). Cria os cartões, as categorias "
-           "que faltarem e os lançamentos como *previstos*. Pode importar de novo: o que já existe não duplica.")
 arq = st.file_uploader("Arquivo .xlsx", type=["xlsx"], key="up_planilha")
 if arq and st.button("Importar planilha", type="primary", icon=":material/upload:"):
     try:

@@ -11,7 +11,6 @@ from core import deducoes as _dd
 
 u = usuario()
 _ui.titulo("Caixa de entrada", "📥")
-st.caption("Compras que chegaram sozinhas (Apple Pay no iPhone, notificações no Android). Confira crédito, débito ou VR/VA, a categoria e o cartão e toque em **Lançar**.")
 
 if msg := st.session_state.pop("_ok_caixa", None):
     st.success(msg, icon=":material/check_circle:")

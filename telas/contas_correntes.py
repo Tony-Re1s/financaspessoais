@@ -83,7 +83,6 @@ def editar_ajuste(conta_id, d, ajuste: float, nome_conta: str):
             st.session_state["_ui_ok"] = "Diferença lançada."
             st.rerun()
     elif acao == "corrigir":
-        st.caption("Digitou errado? Troque o saldo que aparece no app do banco neste dia.")
         novo = st.number_input("Saldo no fim do dia (R$)", value=float(informado), step=10.0, format="%.2f")
         if st.button("Salvar saldo", type="primary", use_container_width=True):
             saldos.informar_saldo(conta_id, d, novo)
@@ -243,7 +242,6 @@ else:
 st.divider()
 c1_, c2_ = st.columns(2)
 with c1_.expander("🔧 Informar saldo real"):
-    st.caption("Digite o saldo que aparece no app do banco. A partir dele o app recalcula tudo.")
     with st.form("saldo_real", clear_on_submit=True):
         cid = st.selectbox("Conta", list(caixa["id"]), format_func=dict(zip(caixa["id"], caixa["nome"])).get,
                            index=list(caixa["id"]).index(ids[0]) if len(ids) == 1 else 0)

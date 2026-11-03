@@ -12,8 +12,6 @@ from core import deducoes as _dd
 
 u = usuario()
 _ui.titulo("Lançamento rápido", "⚡")
-st.caption("Tire foto do comprovante, fale ou escreva do seu jeito (“mercado 45 nubank débito”). "
-           "A IA preenche e você só confere.")
 
 if msg := st.session_state.pop("_ok_rapido", None):
     st.success(msg, icon=":material/check_circle:")

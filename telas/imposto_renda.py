@@ -162,8 +162,7 @@ if cel:
     _ui.render(html)
 else:
     _ui.render(f"<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px'>{html}</div>")
-st.caption("Confira com o **informe de rendimentos** que a empresa manda até o fim de fevereiro — ele é o "
-           "documento oficial. Este resumo é uma estimativa para planejar e não substitui a orientação de um contador.")
+st.caption("Estimativa para planejar — confira com o informe de rendimentos.")
 
 # --- salário nas contas fixas ----------------------------------------------------------------------
 st.markdown("<div class='ui-sec'>Salário no fluxo de caixa</div>", unsafe_allow_html=True)

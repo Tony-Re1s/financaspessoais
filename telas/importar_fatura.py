@@ -8,9 +8,6 @@ from telas._comum import cartoes_kpi, col_rs, e_celular, em_reais, opcoes_catego
 
 u = usuario()
 _ui.titulo("Importar fatura", "💳")
-st.caption("Suba a fatura do cartão. O app mostra o que é novo, o que já estava lançado (planilha, Apple Pay, "
-           "manual) e cria as parcelas futuras — sem duplicar. Pode importar a mesma fatura de novo quando ela "
-           "atualizar.")
 
 if msg := st.session_state.pop("_ok_fat", None):
     st.success(msg, icon=":material/check_circle:")

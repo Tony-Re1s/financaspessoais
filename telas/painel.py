@@ -166,9 +166,6 @@ with st.container(border=True):
         {_linha('Saldo inicial', 'inicial')}{_linha('↑ Entradas', 'entradas', 'pos')}{_linha('↓ Saídas', 'saidas', 'neg')}
         {_linha('Ajustes', 'ajustes') if tem_aj else ''}{_linha('Saldo final', 'final', 'fim')}
         </tbody></table></div>""")
-    st.caption("Contas correntes suas. Faturas de cartão entram como saída no vencimento, na conta que paga. "
-               "Transferências entre as suas contas não contam como entrada nem saída. Meses à frente = previsão "
-               "(contas fixas, parcelas e faturas já lançadas).")
 
 # --- por conta e por cartão, mês a mês ---------------------------------------------------------------
 st.markdown("<div class='ui-sec'>Contas e cartões mês a mês</div>", unsafe_allow_html=True)
@@ -214,8 +211,6 @@ if visao == "contas":
               <div class="s">em {mes_label(sel)}: sobra {brl(lin['fim'][meses.index(sel)])}</div></div></div>
             <div class="ui-fluxo"><table><thead><tr><th></th>{_cab_m}</tr></thead><tbody>{linhas}</tbody></table></div>
             </div>""")
-    st.caption("Entradas e saídas incluem transferências entre as suas contas. As faturas saem da conta que paga, no "
-               "vencimento (defina em Contas e cartões → Fatura paga pela conta).")
 else:
     fat_all = cartoes.faturas(u)
     info_c = contas.set_index("id")
@@ -243,7 +238,6 @@ else:
                         for m in meses)
         _ui.render(f"""<div class="ui-lista-html"><div class="ui-fluxo"><table><thead><tr><th></th>{_cab_m}</tr></thead>
             <tbody>{''.join(linhas)}<tr><th>Total dos cartões</th>{tds_t}</tr></tbody></table></div></div>""")
-        st.caption("✓ = fatura marcada como paga. Clique em **Ver faturas** para o detalhe de cada uma.")
 
 # --- contas e cartões ---------------------------------------------------------------------------
 cards = []
@@ -337,8 +331,6 @@ def _detalhe_cat(cat_sel):
                 acao = (lambda lid=r["id"]: _ui.editar_lancamento(u, lid)) if r["meu"] else (lambda: None)
                 _ui.linha_editavel(f"cd{i}", _ui.item_html(ic, r["descricao"], sub, tag, tcls, r["status"] == "previsto"),
                                    _ui.valor_html(-float(r["valor"]), r["status"] == "previsto"), acao)
-        st.caption("Embaixo de cada item: subcategoria · conta · de onde veio (planilha, fatura/extrato, Caixa de "
-                   "entrada, conta fixa ou manual).")
 
 
 
@@ -355,7 +347,6 @@ with esq:
         linhas = [f"<div class='ui-cat'><div class='t'><span>Total do mês</span><span class='v'>{brl(total_cat)}</span>"
                   f"</div><div class='p'>pago {brl(pago)} · a pagar {brl(aberto)}</div></div>"]
         _ui.render(f"<div class='ui-lista-html' style='margin-bottom:6px'>{linhas[0]}</div>")
-        st.caption("Toque numa categoria para ver e editar o que entrou nela.")
         cat_sel = st.session_state.get("_painel_cat")
         with st.container(key="uilista_cats"):
             for i, r in enumerate(cat.itertuples()):

@@ -11,8 +11,6 @@ from telas._comum import cartoes_kpi, col_rs, e_celular, em_reais, opcoes_catego
 u = usuario()
 cel = e_celular()
 _ui.titulo("Importar extrato de conta", "🧾")
-st.caption("Suba o extrato da conta corrente. O app separa o que é gasto, o que é pagamento de fatura (não conta "
-           "de novo), Pix no crédito e transferência entre suas contas, e liga com o que já estava lançado.")
 
 if msg := st.session_state.pop("_ok_ext", None):
     st.success(msg, icon=":material/check_circle:")
@@ -115,7 +113,6 @@ if not novas.empty:
     editado = st.data_editor(ed, column_config=cfg, hide_index=True, use_container_width=True,
                              column_order=["importar", "descricao", "valor", "categoria"] if cel else list(cfg),
                              key=f"ed_ext_{assinatura}_{conta_id}", height=min(38 + 35 * len(ed), 560))
-    st.caption("Valor positivo = entrada. Edite a descrição se quiser; o texto original fica guardado na observação.")
 else:
     editado = None
     st.success("Nenhum lançamento novo — tudo já está no app.", icon=":material/done_all:")
@@ -141,8 +138,6 @@ if not fora.empty:
                      use_container_width=True,
                      column_config={"data": st.column_config.DateColumn("Data", format="DD/MM"),
                                     "descricao": "Descrição", "valor": col_rs(), "motivo": "Por quê"})
-        st.caption("Pagamento de fatura: se a fatura de mesmo valor está no app, ela é marcada como paga; senão entra "
-                   "como transferência para o cartão (o saldo da conta bate e o gasto não conta duas vezes).")
 
 # --- gravar -----------------------------------------------------------------------------------
 regs["importar"] = True
