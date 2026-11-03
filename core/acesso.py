@@ -61,7 +61,7 @@ def situacao(email: str) -> tuple[bool, dict]:
 
 def registrar_acesso(email: str):
     try:
-        db.executar("update acessos set ultimo_acesso = now() where email = :e", e=email.strip().lower())
+        db.executar("update acessos set ultimo_acesso = now() where email = :e", mudar=False, e=email.strip().lower())
     except Exception:  # noqa: BLE001
         pass
 

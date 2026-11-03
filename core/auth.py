@@ -84,7 +84,7 @@ def exigir_login() -> dict:
         st.button("Sair", on_click=st.logout)
         st.stop()
 
-    with db.transacao() as s:
+    with db.transacao(mudar=False) as s:   # login não muda os dados das telas: não apaga o cache
         usuario = garantir_usuario(s, email, nome)
     usuario["admin"] = acesso.e_admin(email)
     try:

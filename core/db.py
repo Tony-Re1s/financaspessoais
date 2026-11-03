@@ -14,13 +14,15 @@ from sqlalchemy import text
 
 def _conn():
     # pool_pre_ping: o Neon "dorme" após 5 min sem uso; isso refaz a conexão sozinho
-    return st.connection("neon", type="sql", pool_pre_ping=True, pool_recycle=240)
+    # sem pool_pre_ping: ele faz um "select 1" a mais (uma viagem até o Neon) a cada consulta.
+    # pool_recycle troca a conexão antes do Neon derrubar; se mesmo assim cair, _ler tenta de novo.
+    return st.connection("neon", type="sql", pool_recycle=240)
 
 
 # ---------------------------------------------------------------------------------------------
 # Leituras guardadas em memória: cada clique refaz a tela inteira, e o Neon fica longe do servidor
 # do app — dezenas de consultas por tela viravam 20-30 s. Qualquer gravação feita pelo app muda a
-# "versão" e apaga o que estava guardado; o que muda por fora (Atalho do iPhone, console) vence em 2 min.
+# "versão" e apaga o que estava guardado; o que muda por fora (console) vence em 30 min; a Caixa de entrada (Atalho) é lida sempre na hora.
 # ---------------------------------------------------------------------------------------------
 _VERSAO = {"n": 0}
 SEM_CACHE = ("caixa_entrada",)          # chega pelo celular a qualquer momento
@@ -31,25 +33,34 @@ def _mudou():
 
 
 @contextmanager
-def transacao():
-    """Bloco com commit no fim (ou rollback se der erro)."""
+def transacao(mudar: bool = True):
+    """Bloco com commit no fim (ou rollback se der erro).
+    mudar=False: gravação que não muda o que as telas mostram (ex.: último acesso) — não apaga as leituras guardadas."""
     with _conn().session as s:
         try:
             yield s
             s.commit()
-            _mudou()
+            if mudar:
+                _mudou()
         except Exception:
             s.rollback()
             raise
 
 
 def _ler(sql: str, params: dict):
-    with _conn().session as s:
-        res = s.execute(text(sql), params)
-        return list(res.keys()), [tuple(r) for r in res.all()]
+    from sqlalchemy.exc import DBAPIError
+    for tentativa in (1, 2):
+        try:
+            with _conn().session as s:
+                res = s.execute(text(sql), params)
+                return list(res.keys()), [tuple(r) for r in res.all()]
+        except DBAPIError as e:
+            if tentativa == 2 or not e.connection_invalidated:
+                raise
+            # conexão que o Neon derrubou: o pool já descartou, tenta numa nova
 
 
-@st.cache_data(ttl=120, max_entries=3000, show_spinner=False)
+@st.cache_data(ttl=30 * 60, max_entries=3000, show_spinner=False)
 def _ler_cache(sql: str, params: dict, versao: int):
     return _ler(sql, params)
 
@@ -84,8 +95,8 @@ def gravar_retornando(sql: str, **params) -> dict | None:
         return dict(row) if row else None
 
 
-def executar(sql: str, **params) -> int:
-    with transacao() as s:
+def executar(sql: str, mudar: bool = True, **params) -> int:
+    with transacao(mudar) as s:
         return s.execute(text(sql), params).rowcount
 
 
