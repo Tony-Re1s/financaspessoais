@@ -47,8 +47,9 @@ df["categoria"] = df["categoria"].fillna("Sem categoria")
 df["parc_tipo"] = df["parcela_num"].map(lambda p: "Parcelado" if pd.notna(p) else "À vista")
 df["tipo_n"] = df["tipo"].map({"despesa": "↓ Despesas", "receita": "↑ Receitas", "transferencia": "🔁 Transferências"})
 
-with st.container(border=True, key="filtros_lanc"):
-    st.markdown("**Filtros**")
+with (st.expander("Mais filtros") if cel else st.container(border=True, key="filtros_lanc")):
+    if not cel:
+        st.markdown("**Filtros**")
     q1, q2 = st.columns(2) if not cel else (st.container(), st.container())
     f_tipo = q1.pills("Tipo", sorted(df["tipo_n"].dropna().unique()), selection_mode="multi", key="f_tipo")
     f_meio = q2.pills("Meio de pagamento", sorted(df["meio"].unique()), selection_mode="multi", key="f_meio")
@@ -259,12 +260,79 @@ def _tabela(dfp: pd.DataFrame, aba: str):
         st.rerun()
 
 
-st.caption("✏️ Edite direto na tabela (categoria, conta, situação, data, descrição, valor) — nada é gravado até "
-           "você tocar em **Salvar alterações**. A coluna ✓ marca vários para a ação em lote.")
+# --- celular: linhas tocáveis; tocar abre a ficha do lançamento -----------------------------------
+MESES_C = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"]
+
+
+@st.dialog("Lançamento")
+def _ficha(lid):
+    l = repo.lancamento(u, lid)
+    if not l:
+        st.warning("Lançamento não encontrado.")
+        return
+    pago = l["status"] == "pago"
+    sinal = "+" if l["tipo"] == "receita" else ("−" if l["tipo"] == "despesa" else "")
+    venc = l["data_vencimento"]
+    sit = "✅ Pago" if pago else ("🔴 Vencido" if venc and venc < hoje() else "⏳ Previsto")
+    _ui.render(f"""<div class="ui-ficha-topo"><div class="v">{sinal} {brl(float(l['valor']))}</div>
+        <div class="d">{_ui.esc(l['descricao'])}</div>
+        <div class="s">{sit} · vence {venc:%d/%m/%Y}</div></div>""")
+    if not pago:
+        if l["conta_id"] is None:
+            st.warning("Sem conta: escolha abaixo de qual conta saiu e salve como pago.", icon=":material/account_balance:")
+        elif st.button("✅ Marcar como pago", type="primary", width="stretch", key=f"fp_{lid}"):
+            repo.mudar_status(u, [lid], "pago")
+            st.session_state["_ui_ok"] = "Pago — foi para a aba ✅ Pagos."
+            st.rerun()
+    elif st.button("⏳ Voltar para previsto", width="stretch", key=f"fv_{lid}"):
+        repo.mudar_status(u, [lid], "previsto")
+        st.session_state["_ui_ok"] = "Voltou para previsto."
+        st.rerun()
+    with st.expander("✏️ Editar", expanded=l["conta_id"] is None and not pago):
+        _ui.form_lancamento(u, lid)
+
+
+def _lista_celular(dfp: pd.DataFrame, aba: str):
+    if dfp.empty:
+        _ui.render("<div class='ui-tudo-ok'>Nada aqui no período e filtros escolhidos.</div>")
+        return
+    dfp = dfp.sort_values("data_vencimento", ascending=(aba == "aberto"))
+    lim_k = f"_lim_{aba}"
+    lim = st.session_state.get(lim_k, 40)
+    with st.container(key=f"llista_{aba}"):
+        for idx, r in dfp.head(lim).iterrows():
+            d = r["data_vencimento"]
+            rec = r["tipo"] == "receita"
+            sin = "+" if rec else ("⇄" if r["tipo"] == "transferencia" else "−")
+            if r["status"] == "pago":
+                chip, cls = "Pago", "ok"
+            elif d < hoje():
+                chip, cls = "Vencido", "bad"
+            else:
+                chip, cls = "Previsto", "warn"
+            sub = " · ".join(x for x in [r["conta"] if isinstance(r["conta"], str) else "sem conta",
+                                          r["subcategoria"] if isinstance(r["subcategoria"], str) else r["categoria"],
+                                          r["parcela"]] if x)
+            with st.container(key=f"lrow_{aba}_{idx}"):
+                _ui.render(f"""<div class="ui-lrow"><div class="dia"><b>{d.day:02d}</b><span>{MESES_C[d.month - 1]}</span></div>
+                    <div class="tx"><div class="t">{_ui.esc(r['descricao'])}</div><div class="s">{_ui.esc(sub)}</div></div>
+                    <div class="dir"><div class="v{' pos' if rec else ''}">{sin} {brl(float(r['valor']))}</div>
+                    <span class="chip {cls}">{chip}</span></div></div>""")
+                if st.button("Abrir", key=f"lb_{aba}_{idx}", width="stretch"):
+                    _ficha(r["id"])
+    if len(dfp) > lim:
+        if st.button(f"Mostrar mais ({len(dfp) - lim})", key=f"mais_{aba}", width="stretch"):
+            st.session_state[lim_k] = lim + 40
+            st.rerun()
+
+
 _aberto = df[df["status"] != "pago"]
 _pagos = df[df["status"] == "pago"]
-t_ab, t_pg = st.tabs([f"⏳ A pagar / previstos ({len(_aberto)})", f"✅ Pagos ({len(_pagos)})"])
+if not cel:
+    st.caption("✏️ Edite direto na tabela (categoria, conta, situação, data, descrição, valor) — nada é gravado até "
+               "você tocar em **Salvar alterações**. A coluna ✓ marca vários para a ação em lote.")
+t_ab, t_pg = st.tabs([f"⏳ A pagar ({len(_aberto)})", f"✅ Pagos ({len(_pagos)})"])
 with t_ab:
-    _tabela(_aberto, "aberto")
+    _lista_celular(_aberto, "aberto") if cel else _tabela(_aberto, "aberto")
 with t_pg:
-    _tabela(_pagos, "pago")
+    _lista_celular(_pagos, "pago") if cel else _tabela(_pagos, "pago")

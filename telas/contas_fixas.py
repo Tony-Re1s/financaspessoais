@@ -11,6 +11,7 @@ from telas import _ui
 from telas._comum import cartoes_kpi, col_rs, e_celular, em_reais, opcoes_categoria, usuario
 
 u = usuario()
+cel = e_celular()
 _ui.titulo("Contas fixas", "🔁")
 st.caption("Aluguel, condomínio, escola, assinaturas… Cadastre uma vez: o app lança os próximos 12 meses como "
            "*previstos* e vai completando sozinho. Se o lançamento já existir (planilha, fatura), ele só liga.")
@@ -31,13 +32,12 @@ cartoes_kpi([("Saem por mês", brl(desp)), ("Contas fixas ativas", str(len(ativa
              ("↑ Entram por mês", brl(rec_)), ("Saldo fixo", brl(rec_ - desp)), ("Por ano", brl(desp * 12))],
             titulo="Compromissos fixos", icone="🔁", c1="#4A2A12", c2="#9A5A1E")
 
-if not df.empty:
+if not df.empty and not cel:
     v = df.copy()
     v["valor"] = v["valor"].astype(float)
     v["quando"] = v.apply(lambda r: f"dia {int(r.dia_vencimento)}" if pd.notna(r.dia_vencimento) else "—", axis=1)
     v["sit"] = v["ativa"].map({True: "✅", False: "⏸️"})
-    cols = ["sit", "descricao", "quando", "valor"] if e_celular() else \
-        ["sit", "descricao", "quando", "conta", "proxima", "valor"]
+    cols = ["sit", "descricao", "quando", "conta", "proxima", "valor"]
     st.dataframe(em_reais(v[cols].fillna({"conta": "—"})), hide_index=True, use_container_width=True,
                  column_config={"sit": st.column_config.TextColumn("", width=30), "descricao": "Conta fixa",
                                 "quando": "Cobra", "conta": "Conta/cartão",
@@ -80,70 +80,95 @@ if not sug.empty:
             st.rerun()
 
 # --- cadastro / edição ------------------------------------------------------------------------
-st.divider()
-op = {None: "➕ Nova conta fixa"} | {r.id: f"Editar: {r.descricao}" for r in df.itertuples()}
-escolha = st.selectbox("O que fazer", list(op), format_func=op.get, key="rec_escolha")
-a = df[df["id"] == escolha].iloc[0].to_dict() if escolha else {}
+def _cadastro(escolha):
+    a = df[df["id"] == escolha].iloc[0].to_dict() if escolha else {}
+
+    def _v(k, padrao=None):
+        x = a.get(k)
+        return padrao if x is None or (not isinstance(x, str) and pd.isna(x)) else x
 
 
-def _v(k, padrao=None):
-    x = a.get(k)
-    return padrao if x is None or (not isinstance(x, str) and pd.isna(x)) else x
+    with st.form(f"rec_{escolha}"):
+        tipo = st.segmented_control("Tipo", ["despesa", "receita"], default=_v("tipo", "despesa"),
+                                    format_func=lambda t: "💸 Despesa" if t == "despesa" else "💰 Receita (salário…)")
+        c1, c2 = st.columns([2, 1])
+        descricao = c1.text_input("Descrição", _v("descricao", ""), placeholder="Ex.: Condomínio")
+        valor = c2.number_input("Valor (R$)", 0.0, value=float(_v("valor", 0.0)), step=10.0, format="%.2f")
+        c1, c2 = st.columns(2)
+        cat_ids = list(op_cat)
+        categoria_id = c1.selectbox("Categoria", cat_ids, format_func=op_cat.get, placeholder="Categoria",
+                                    index=cat_ids.index(a.get("categoria_id")) if a.get("categoria_id") in cat_ids else None)
+        conta_ids = list(op_contas)
+        conta_id = c2.selectbox("Conta / cartão", conta_ids, format_func=op_contas.get,
+                                index=conta_ids.index(a.get("conta_id")) if a.get("conta_id") in conta_ids else 0,
+                                help="No cartão, o dia abaixo é o dia da cobrança; o app joga na fatura certa.")
+        c1, c2, c3 = st.columns(3)
+        dia = c1.number_input("Dia", 1, 31, int(_v("dia_vencimento", hoje().day)))
+        freq = c2.selectbox("Repete", ["mensal", "anual"], index=1 if _v("frequencia") == "anual" else 0,
+                            format_func=str.capitalize)
+        inicio = c3.date_input("A partir de", _v("inicio", date(hoje().year, hoje().month, 1)), format="DD/MM/YYYY")
+        c1, c2 = st.columns(2)
+        tem_fim = c1.toggle("Tem data para acabar", value=_v("fim") is not None)
+        fim = c2.date_input("Até", _v("fim", hoje()), format="DD/MM/YYYY", disabled=not tem_fim)
+        op_vis = {None: "Herdar da categoria/conta"} | VISIBILIDADES
+        vis_ids = list(op_vis)
+        vis = st.selectbox("Quem vê", vis_ids, format_func=op_vis.get,
+                           index=vis_ids.index(a.get("visibilidade")) if a.get("visibilidade") in vis_ids else 0)
+        ok = st.form_submit_button("Salvar", type="primary", icon=":material/save:")
 
-
-with st.form(f"rec_{escolha}"):
-    tipo = st.segmented_control("Tipo", ["despesa", "receita"], default=_v("tipo", "despesa"),
-                                format_func=lambda t: "💸 Despesa" if t == "despesa" else "💰 Receita (salário…)")
-    c1, c2 = st.columns([2, 1])
-    descricao = c1.text_input("Descrição", _v("descricao", ""), placeholder="Ex.: Condomínio")
-    valor = c2.number_input("Valor (R$)", 0.0, value=float(_v("valor", 0.0)), step=10.0, format="%.2f")
-    c1, c2 = st.columns(2)
-    cat_ids = list(op_cat)
-    categoria_id = c1.selectbox("Categoria", cat_ids, format_func=op_cat.get, placeholder="Categoria",
-                                index=cat_ids.index(a.get("categoria_id")) if a.get("categoria_id") in cat_ids else None)
-    conta_ids = list(op_contas)
-    conta_id = c2.selectbox("Conta / cartão", conta_ids, format_func=op_contas.get,
-                            index=conta_ids.index(a.get("conta_id")) if a.get("conta_id") in conta_ids else 0,
-                            help="No cartão, o dia abaixo é o dia da cobrança; o app joga na fatura certa.")
-    c1, c2, c3 = st.columns(3)
-    dia = c1.number_input("Dia", 1, 31, int(_v("dia_vencimento", hoje().day)))
-    freq = c2.selectbox("Repete", ["mensal", "anual"], index=1 if _v("frequencia") == "anual" else 0,
-                        format_func=str.capitalize)
-    inicio = c3.date_input("A partir de", _v("inicio", date(hoje().year, hoje().month, 1)), format="DD/MM/YYYY")
-    c1, c2 = st.columns(2)
-    tem_fim = c1.toggle("Tem data para acabar", value=_v("fim") is not None)
-    fim = c2.date_input("Até", _v("fim", hoje()), format="DD/MM/YYYY", disabled=not tem_fim)
-    op_vis = {None: "Herdar da categoria/conta"} | VISIBILIDADES
-    vis_ids = list(op_vis)
-    vis = st.selectbox("Quem vê", vis_ids, format_func=op_vis.get,
-                       index=vis_ids.index(a.get("visibilidade")) if a.get("visibilidade") in vis_ids else 0)
-    ok = st.form_submit_button("Salvar", type="primary", icon=":material/save:")
-
-if ok:
-    if not descricao.strip() or valor <= 0:
-        st.error("Preencha descrição e valor.")
-    else:
-        rec.salvar(u, dict(descricao=descricao.strip(), valor=valor, conta_id=conta_id, categoria_id=categoria_id,
-                           tipo=tipo or "despesa", frequencia=freq, dia_vencimento=int(dia), inicio=inicio,
-                           fim=fim if tem_fim else None, visibilidade=vis, ativa=True), escolha)
-        st.session_state["_ok_rec"] = f"**{descricao}** salva — lançamentos dos próximos 12 meses prontos."
-        st.rerun()
-
-if escolha:
-    c1, c2 = st.columns(2)
-    if a.get("ativa"):
-        if c1.button("⏸️ Encerrar", use_container_width=True,
-                     help="Para de gerar e tira os previstos futuros. O que já passou fica."):
-            rec.encerrar(u, escolha)
-            st.session_state["_ok_rec"] = "Conta fixa encerrada."
+    if ok:
+        if not descricao.strip() or valor <= 0:
+            st.error("Preencha descrição e valor.")
+        else:
+            rec.salvar(u, dict(descricao=descricao.strip(), valor=valor, conta_id=conta_id, categoria_id=categoria_id,
+                               tipo=tipo or "despesa", frequencia=freq, dia_vencimento=int(dia), inicio=inicio,
+                               fim=fim if tem_fim else None, visibilidade=vis, ativa=True), escolha)
+            st.session_state["_ok_rec"] = f"**{descricao}** salva — lançamentos dos próximos 12 meses prontos."
             st.rerun()
-    else:
-        if c1.button("▶️ Reativar", use_container_width=True):
-            rec.salvar(u, a | {"ativa": True}, escolha)
-            st.rerun()
-    with c2.popover("🗑️ Excluir", use_container_width=True):
-        st.caption("Apaga a conta fixa e os previstos futuros. Pagos e passados ficam.")
-        if st.button("Excluir de vez", type="primary"):
-            rec.encerrar(u, escolha, apagar=True)
-            st.session_state["_ok_rec"] = "Conta fixa excluída."
-            st.rerun()
+
+    if escolha:
+        c1, c2 = st.columns(2)
+        if a.get("ativa"):
+            if c1.button("⏸️ Encerrar", use_container_width=True,
+                         help="Para de gerar e tira os previstos futuros. O que já passou fica."):
+                rec.encerrar(u, escolha)
+                st.session_state["_ok_rec"] = "Conta fixa encerrada."
+                st.rerun()
+        else:
+            if c1.button("▶️ Reativar", use_container_width=True):
+                rec.salvar(u, a | {"ativa": True}, escolha)
+                st.rerun()
+        with c2.popover("🗑️ Excluir", use_container_width=True):
+            st.caption("Apaga a conta fixa e os previstos futuros. Pagos e passados ficam.")
+            if st.button("Excluir de vez", type="primary"):
+                rec.encerrar(u, escolha, apagar=True)
+                st.session_state["_ok_rec"] = "Conta fixa excluída."
+                st.rerun()
+
+
+@st.dialog("Conta fixa")
+def _ficha(escolha):
+    _cadastro(escolha)
+
+
+if cel:
+    if st.button("Nova conta fixa", icon=":material/add:", type="primary", width="stretch", key="nova_rec"):
+        _ficha(None)
+    if not df.empty:
+        lst = df.assign(_a=~df["ativa"].astype(bool), _d=df["dia_vencimento"].fillna(99)).sort_values(["_a", "_d"])
+        with st.container(key="llista_rec"):
+            for r in lst.itertuples():
+                rec_ = r.tipo == "receita"
+                dia = f"<b>{int(r.dia_vencimento):02d}</b><span>DIA</span>" if pd.notna(r.dia_vencimento) else "<b>—</b>"
+                sub = [r.conta if isinstance(r.conta, str) else "sem conta",
+                       "anual" if r.frequencia == "anual" else "mensal"]
+                if pd.notna(r.proxima):
+                    sub.append(f"próxima {pd.Timestamp(r.proxima):%d/%m}")
+                if _ui.linha(f"r_{r.id}", f"<div class='dia'>{dia}</div>", r.descricao, " · ".join(sub),
+                             valor=f"{'+' if rec_ else '−'} {brl(float(r.valor))}", valor_cls="pos" if rec_ else "",
+                             chip="" if r.ativa else "Encerrada", chip_cls="mute"):
+                    _ficha(r.id)
+else:
+    st.divider()
+    op = {None: "➕ Nova conta fixa"} | {r.id: f"Editar: {r.descricao}" for r in df.itertuples()}
+    _cadastro(st.selectbox("O que fazer", list(op), format_func=op.get, key="rec_escolha"))

@@ -35,6 +35,18 @@ def render(s: str):
     st.markdown(re.sub(r"\n\s*", "", s), unsafe_allow_html=True)
 
 
+def linha(chave: str, esquerda: str, titulo: str, sub: str = "", valor: str = "", chip: str = "",
+          chip_cls: str = "ok", valor_cls: str = "") -> bool:
+    """Linha tocável (celular): a linha inteira é um botão invisível. Devolve True quando tocada.
+    Chamar dentro de st.container(key="llista_…"). `esquerda` = HTML do quadrado (dia, selo…)."""
+    with st.container(key=f"lrow_{chave}"):
+        dir_ = (f"<div class='v {valor_cls}'>{valor}</div>" if valor else "") + \
+               (f"<span class='chip {chip_cls}'>{esc(chip)}</span>" if chip else "")
+        render(f"""<div class="ui-lrow">{esquerda}<div class="tx"><div class="t">{esc(titulo)}</div>
+            <div class="s">{esc(sub)}</div></div><div class="dir">{dir_}</div></div>""")
+        return st.button("Abrir", key=f"lb_{chave}", width="stretch")
+
+
 # ---------------------------------------------------------------------------------------------
 # bancos: logo + cores do degradê (escuras o bastante para texto branco)
 # ---------------------------------------------------------------------------------------------
@@ -259,6 +271,30 @@ html, body, [class*="css"], .stApp, button, input, textarea, select {font-family
 [class*="st-key-pend_alto"] span[data-testid="stIconMaterial"] {color: #C81E1E !important;}
 [class*="st-key-pend_medio"] span[data-testid="stIconMaterial"] {color: #B45309 !important;}
 [class*="st-key-pend_info"] span[data-testid="stIconMaterial"] {color: #0B7A66 !important;}
+/* ===== listas tocáveis (celular): a linha inteira abre a ficha ===== */
+[class*="st-key-llista_"] {background: #fff; border-radius: 20px; box-shadow: 0 2px 12px rgba(17,24,39,.06);
+  gap: 0 !important; overflow: hidden;}
+[class*="st-key-lrow_"] {position: relative; gap: 0 !important; border-bottom: 1px solid rgba(17,24,39,.06);}
+[class*="st-key-lrow_"]:last-child {border-bottom: 0;}
+[class*="st-key-lrow_"] .stButton {position: absolute !important; inset: 0; z-index: 2; margin: 0 !important;}
+[class*="st-key-lrow_"] .stButton button {width: 100%; height: 100%; opacity: 0; min-height: 0 !important;}
+[class*="st-key-lrow_"]:active {background: rgba(11,122,102,.06);}
+.ui-lrow {display: flex; align-items: center; gap: 12px; padding: 11px 14px;}
+.ui-lrow .dia {width: 42px; height: 42px; border-radius: 13px; background: #DDF5EE; color: #0B7A66; flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1;}
+.ui-lrow .dia b {font-size: 1rem; font-weight: 900;} .ui-lrow .dia span {font-size: .6rem; font-weight: 800;}
+.ui-lrow .tx {flex: 1; min-width: 0;}
+.ui-lrow .t {font-weight: 800; font-size: .92rem; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+.ui-lrow .s {font-size: .76rem; color: #5B6472; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+.ui-lrow .dir {display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0;}
+.ui-lrow .v {font-weight: 900; font-size: .92rem; color: #111827; white-space: nowrap;} .ui-lrow .v.pos {color: #0B7A66;}
+.chip {font-size: .64rem; font-weight: 900; padding: 2px 8px; border-radius: 99px;}
+.chip.ok {background: #DDF5EE; color: #0B7A66;} .chip.warn {background: #FDEBD3; color: #A2490A;}
+.chip.bad {background: #FDE2E2; color: #C81E1E;} .chip.mute {background: #E5E7EB; color: #5B6472;}
+.ui-lrow .v.neg {color: #C81E1E;} .ui-lrow .sel {flex-shrink: 0; display: flex;}
+.ui-ficha-topo {text-align: center; margin: -6px 0 12px;}
+.ui-ficha-topo .v {font-size: 2rem; font-weight: 900; color: #111827; letter-spacing: -.5px;}
+.ui-ficha-topo .d {font-weight: 800; font-size: 1rem;} .ui-ficha-topo .s {font-size: .82rem; color: #5B6472;}
 /* ===== barra de abas fixa embaixo (só no celular) ===== */
 .st-key-tabbar {display: none !important;}
 @media (max-width: 640px) {
@@ -288,7 +324,7 @@ html, body, [class*="css"], .stApp, button, input, textarea, select {font-family
     align-items: center; justify-content: center; max-width: 100%;}
   .st-key-tabbar [data-testid="stPageLink"] a span[data-testid="stIconMaterial"] {font-size: 1.6rem !important;
     color: #5B6472 !important;}
-  .st-key-tabbar [data-testid="stPageLink"] a p, .ui-mais .r {font-size: .72rem !important; font-weight: 800 !important;
+  .st-key-tabbar [data-testid="stPageLink"] a p, .ui-mais .r {font-size: .66rem !important; letter-spacing: -.2px; font-weight: 800 !important;
     color: #5B6472 !important; margin: 0 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     line-height: 20px !important;}
   .st-key-tab_on [data-testid="stPageLink"] a > span:first-child {background: #DDF5EE !important;}
@@ -477,6 +513,10 @@ def periodo(chave: str, padrao="mes") -> tuple[date, date, str]:
 # ---------------------------------------------------------------------------------------------
 @st.dialog("Editar lançamento")
 def editar_lancamento(u, lanc_id, faturas: list[tuple[str, date]] | None = None):
+    form_lancamento(u, lanc_id, faturas)
+
+
+def form_lancamento(u, lanc_id, faturas: list[tuple[str, date]] | None = None):
     """faturas: [(rótulo, vencimento)] para mudar a compra de fatura (cartão)."""
     from core import repo
     from telas._comum import opcoes_categoria

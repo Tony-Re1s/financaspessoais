@@ -20,9 +20,91 @@ inst = contas[contas["tipo"].isin(inv.TIPOS_INSTITUICAO)]
 caixa = contas[contas["tipo"].isin(["conta_corrente", "poupanca", "carteira"])]
 df = inv.ativos(u)
 
+
+def _cadastro(escolha):
+    a = df[df["id"] == escolha].iloc[0].to_dict() if escolha else {}
+
+    def _v(k, padrao=None):
+        x = a.get(k)
+        return padrao if x is None or (not isinstance(x, str) and pd.isna(x)) else x
+
+
+    with st.form(f"ativo_{escolha}"):
+        c1, c2 = st.columns(2)
+        op_i = {None: "➕ Nova instituição…"} | dict(zip(inst["id"], inst["nome"]))
+        ids_i = list(op_i)
+        conta_id = c1.selectbox("Banco / corretora", ids_i, format_func=op_i.get,
+                                index=ids_i.index(a.get("conta_id")) if a.get("conta_id") in ids_i else (1 if len(ids_i) > 1 else 0))
+        nova_inst = c2.text_input("Nome da nova instituição", placeholder="Ex.: XP, Nubank Caixinhas, Itaú Personnalité",
+                                  help="Só se escolheu ➕ Nova instituição")
+        nome = st.text_input("Aplicação", _v("nome", ""), placeholder="Ex.: CDB Inter 110% CDI, Tesouro IPCA+ 2035")
+        c1, c2, c3 = st.columns(3)
+        classes = list(inv.CLASSES)
+        classe = c1.selectbox("Tipo", classes, format_func=inv.CLASSES.get,
+                              index=classes.index(_v("classe", "renda_fixa")))
+        indexador = c2.selectbox("Rende por", ["", "CDI", "IPCA", "SELIC", "PRE", "Variável"],
+                                 index=["", "CDI", "IPCA", "SELIC", "PRE", "Variável"].index(_v("indexador", "") or ""))
+        taxa = c3.number_input("Taxa", 0.0, value=float(_v("taxa", 0.0)), step=1.0, format="%.2f",
+                               help="Ex.: 110 (% do CDI) ou 6,5 (IPCA + 6,5%)")
+        c1, c2, c3 = st.columns(3)
+        data_ap = c1.date_input("Aplicado em", _v("data_aplicacao", None), format="DD/MM/YYYY")
+        venc = c2.date_input("Vencimento", _v("vencimento", None), format="DD/MM/YYYY")
+        liq = c3.selectbox("Liquidez", ["Diária", "No vencimento", "D+1", "D+30", "D+90", "Outra"],
+                           index=["Diária", "No vencimento", "D+1", "D+30", "D+90", "Outra"].index(_v("liquidez", "Diária"))
+                           if _v("liquidez", "Diária") in ["Diária", "No vencimento", "D+1", "D+30", "D+90", "Outra"] else 5)
+        if not escolha:
+            c1, c2 = st.columns(2)
+            valor_ini = c1.number_input("Quanto tem hoje (R$)", 0.0, step=100.0, format="%.2f")
+            aplicado_ini = c2.number_input("Quanto você aplicou (R$)", 0.0, step=100.0, format="%.2f",
+                                           help="Para calcular o ganho. Se não souber, deixe igual ao valor de hoje.")
+        vinc = st.text_input("Pagamento mensal que alimenta esta aplicação (opcional)", _v("vinculo_descricao", "") or "",
+                             placeholder="Ex.: CAP PIC — a descrição do débito no extrato",
+                             help="Cada lançamento pago com esta descrição continua como despesa no fluxo e também "
+                                  "soma no saldo desta aplicação (e no Patrimônio).")
+        ativo = st.toggle("Ativa", value=bool(_v("ativo", True)))
+        ok = st.form_submit_button("Salvar", type="primary")
+
+    if ok:
+        if not nome.strip() or (conta_id is None and not nova_inst.strip()):
+            st.error("Preencha a aplicação e a instituição.")
+        else:
+            if conta_id is None:
+                repo.salvar_conta(u, dict(nome=nova_inst.strip(), tipo="previdencia" if classe.startswith("previdencia")
+                                          else "investimento", visibilidade="privado", ativa=True))
+                conta_id = repo.contas(u).set_index("nome").loc[nova_inst.strip(), "id"]
+            aid = inv.salvar_ativo(dict(conta_id=conta_id, nome=nome.strip(), classe=classe, indexador=indexador or None,
+                                        taxa=taxa or None, data_aplicacao=data_ap, vencimento=venc, liquidez=liq,
+                                        ativo=ativo, vinculo_descricao=vinc), escolha)
+            if not escolha and (valor_ini or aplicado_ini):
+                inv.movimentar(u, aid, data_ap or hoje(), "aporte", aplicado_ini or valor_ini)
+                if valor_ini:
+                    inv.informar_posicao(aid, hoje(), valor_ini)
+            st.session_state["_ok_inv"] = f"**{nome}** salva."
+            st.rerun()
+
+    if escolha:
+        with st.expander("Histórico desta aplicação"):
+            h = inv.movimentos(escolha)
+            h["valor"] = h["valor"].astype(float)
+            st.dataframe(em_reais(h), hide_index=True, use_container_width=True,
+                         column_config={"data": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
+                                        "tipo": "Tipo", "valor": col_rs()})
+        with st.popover("🗑️ Excluir aplicação"):
+            st.caption("Apaga a aplicação e o histórico dela.")
+            if st.button("Excluir de vez", type="primary"):
+                inv.excluir(escolha)
+                st.session_state["_ok_inv"] = "Aplicação excluída."
+                st.rerun()
+
+
+@st.dialog("Aplicação")
+def _ficha(escolha):
+    _cadastro(escolha)
+
+
 # --- resumo ---------------------------------------------------------------------------------
 if df.empty:
-    st.info("Nenhuma aplicação cadastrada ainda. Use **➕ Nova aplicação** abaixo — ou me mande a lista "
+    st.info("Nenhuma aplicação cadastrada ainda. Use **Nova aplicação** abaixo — ou me mande a lista "
             "(nome, banco/corretora, tipo, quanto tem hoje) que eu cadastro para você.")
 else:
     total, aplicado = df["valor_atual"].sum(), df["aplicado"].sum()
@@ -36,6 +118,16 @@ else:
     v["atualizado"] = pd.to_datetime(v["data_posicao"])
     v["vencimento"] = pd.to_datetime(v["vencimento"])
     st.markdown("<div class='ui-sec'>Aplicações</div>", unsafe_allow_html=True)
+    if cel:
+        with st.container(key="llista_inv"):
+            for r in v.sort_values("valor_atual", ascending=False).itertuples():
+                g = float(r.valor_atual) - float(r.aplicado or 0)
+                pct = f" {r.ganho_pct:+.1%}".replace(".", ",") if pd.notna(r.ganho_pct) else ""
+                sub = " · ".join(x for x in [r.instituicao, r.classe_n] if isinstance(x, str) and x)
+                if _ui.linha(f"i_{r.id}", f"<div class='sel'>{_ui.selo(r.instituicao, r.instituicao, 42)}</div>",
+                             r.nome, sub, valor=brl(r.valor_atual),
+                             chip=f"{'+' if g >= 0 else '−'} {brl(abs(g))}{pct}", chip_cls="ok" if g >= 0 else "bad"):
+                    _ficha(r.id)
     itens = []
     for r in v.sort_values("valor_atual", ascending=False).itertuples():
         g = float(r.valor_atual) - float(r.aplicado or 0)
@@ -47,7 +139,8 @@ else:
             <div style="text-align:right"><div class="ui-val" style="color:inherit">{brl(r.valor_atual)}</div>
             <div class="ui-val {'pos' if g >= 0 else 'neg'}" style="font-size:.76rem">{'+' if g >= 0 else '−'} {brl(abs(g))}{pct}</div></div>
             </div>""")
-    _ui.render(f"<div class='ui-lista-html'>{''.join(itens)}</div>")
+    if not cel:
+        _ui.render(f"<div class='ui-lista-html'>{''.join(itens)}</div>")
     with st.expander("Ver em tabela"):
         cols = ["nome", "valor_atual"] if cel else \
         ["instituicao", "nome", "classe_n", "aplicado", "valor_atual", "ganho_pct", "liquidez", "vencimento",
@@ -112,80 +205,10 @@ if not df.empty:
                 st.rerun()
 
 # --- cadastro -----------------------------------------------------------------------------------
-st.divider()
-op = {None: "➕ Nova aplicação"} | {r.id: f"Editar: {r.instituicao} · {r.nome}" for r in df.itertuples()}
-escolha = st.selectbox("Cadastro", list(op), format_func=op.get, key="inv_escolha")
-a = df[df["id"] == escolha].iloc[0].to_dict() if escolha else {}
-
-
-def _v(k, padrao=None):
-    x = a.get(k)
-    return padrao if x is None or (not isinstance(x, str) and pd.isna(x)) else x
-
-
-with st.form(f"ativo_{escolha}"):
-    c1, c2 = st.columns(2)
-    op_i = {None: "➕ Nova instituição…"} | dict(zip(inst["id"], inst["nome"]))
-    ids_i = list(op_i)
-    conta_id = c1.selectbox("Banco / corretora", ids_i, format_func=op_i.get,
-                            index=ids_i.index(a.get("conta_id")) if a.get("conta_id") in ids_i else (1 if len(ids_i) > 1 else 0))
-    nova_inst = c2.text_input("Nome da nova instituição", placeholder="Ex.: XP, Nubank Caixinhas, Itaú Personnalité",
-                              help="Só se escolheu ➕ Nova instituição")
-    nome = st.text_input("Aplicação", _v("nome", ""), placeholder="Ex.: CDB Inter 110% CDI, Tesouro IPCA+ 2035")
-    c1, c2, c3 = st.columns(3)
-    classes = list(inv.CLASSES)
-    classe = c1.selectbox("Tipo", classes, format_func=inv.CLASSES.get,
-                          index=classes.index(_v("classe", "renda_fixa")))
-    indexador = c2.selectbox("Rende por", ["", "CDI", "IPCA", "SELIC", "PRE", "Variável"],
-                             index=["", "CDI", "IPCA", "SELIC", "PRE", "Variável"].index(_v("indexador", "") or ""))
-    taxa = c3.number_input("Taxa", 0.0, value=float(_v("taxa", 0.0)), step=1.0, format="%.2f",
-                           help="Ex.: 110 (% do CDI) ou 6,5 (IPCA + 6,5%)")
-    c1, c2, c3 = st.columns(3)
-    data_ap = c1.date_input("Aplicado em", _v("data_aplicacao", None), format="DD/MM/YYYY")
-    venc = c2.date_input("Vencimento", _v("vencimento", None), format="DD/MM/YYYY")
-    liq = c3.selectbox("Liquidez", ["Diária", "No vencimento", "D+1", "D+30", "D+90", "Outra"],
-                       index=["Diária", "No vencimento", "D+1", "D+30", "D+90", "Outra"].index(_v("liquidez", "Diária"))
-                       if _v("liquidez", "Diária") in ["Diária", "No vencimento", "D+1", "D+30", "D+90", "Outra"] else 5)
-    if not escolha:
-        c1, c2 = st.columns(2)
-        valor_ini = c1.number_input("Quanto tem hoje (R$)", 0.0, step=100.0, format="%.2f")
-        aplicado_ini = c2.number_input("Quanto você aplicou (R$)", 0.0, step=100.0, format="%.2f",
-                                       help="Para calcular o ganho. Se não souber, deixe igual ao valor de hoje.")
-    vinc = st.text_input("Pagamento mensal que alimenta esta aplicação (opcional)", _v("vinculo_descricao", "") or "",
-                         placeholder="Ex.: CAP PIC — a descrição do débito no extrato",
-                         help="Cada lançamento pago com esta descrição continua como despesa no fluxo e também "
-                              "soma no saldo desta aplicação (e no Patrimônio).")
-    ativo = st.toggle("Ativa", value=bool(_v("ativo", True)))
-    ok = st.form_submit_button("Salvar", type="primary")
-
-if ok:
-    if not nome.strip() or (conta_id is None and not nova_inst.strip()):
-        st.error("Preencha a aplicação e a instituição.")
-    else:
-        if conta_id is None:
-            repo.salvar_conta(u, dict(nome=nova_inst.strip(), tipo="previdencia" if classe.startswith("previdencia")
-                                      else "investimento", visibilidade="privado", ativa=True))
-            conta_id = repo.contas(u).set_index("nome").loc[nova_inst.strip(), "id"]
-        aid = inv.salvar_ativo(dict(conta_id=conta_id, nome=nome.strip(), classe=classe, indexador=indexador or None,
-                                    taxa=taxa or None, data_aplicacao=data_ap, vencimento=venc, liquidez=liq,
-                                    ativo=ativo, vinculo_descricao=vinc), escolha)
-        if not escolha and (valor_ini or aplicado_ini):
-            inv.movimentar(u, aid, data_ap or hoje(), "aporte", aplicado_ini or valor_ini)
-            if valor_ini:
-                inv.informar_posicao(aid, hoje(), valor_ini)
-        st.session_state["_ok_inv"] = f"**{nome}** salva."
-        st.rerun()
-
-if escolha:
-    with st.expander("Histórico desta aplicação"):
-        h = inv.movimentos(escolha)
-        h["valor"] = h["valor"].astype(float)
-        st.dataframe(em_reais(h), hide_index=True, use_container_width=True,
-                     column_config={"data": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
-                                    "tipo": "Tipo", "valor": col_rs()})
-    with st.popover("🗑️ Excluir aplicação"):
-        st.caption("Apaga a aplicação e o histórico dela.")
-        if st.button("Excluir de vez", type="primary"):
-            inv.excluir(escolha)
-            st.session_state["_ok_inv"] = "Aplicação excluída."
-            st.rerun()
+if cel:
+    if st.button("Nova aplicação", icon=":material/add:", type="primary", width="stretch", key="nova_inv"):
+        _ficha(None)
+else:
+    st.divider()
+    op = {None: "➕ Nova aplicação"} | {r.id: f"Editar: {r.instituicao} · {r.nome}" for r in df.itertuples()}
+    _cadastro(st.selectbox("Cadastro", list(op), format_func=op.get, key="inv_escolha"))

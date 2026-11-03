@@ -3,10 +3,12 @@ import streamlit as st
 
 from core import repo
 from core.padroes import TIPOS_CONTA, VISIBILIDADES
+from core.fmt import brl
 from telas import _ui
 from telas._comum import col_rs, e_celular, em_reais, usuario
 
 u = usuario()
+cel = e_celular()
 _ui.titulo("Contas e cartões", "🏦")
 if msg := st.session_state.pop("_ok_conta", None):
     st.success(msg)
@@ -15,103 +17,129 @@ df = repo.contas(u, so_ativas=False)
 
 if df.empty:
     st.info("Nenhuma conta ainda. Cadastre abaixo — ou rode a migração da planilha, que já cria os cartões.")
-else:
+if not df.empty:
     vis = df.copy()
     vis["tipo"] = vis["tipo"].map(TIPOS_CONTA)
     vis["visibilidade"] = vis["visibilidade"].map(lambda v: VISIBILIDADES[v].split(" — ")[0])
     vis["limite"] = vis["limite"].astype(float)
-    cols = (["nome", "tipo", "dia_vencimento"] if e_celular() else
-            ["nome", "tipo", "instituicao", "dia_fechamento", "dia_vencimento", "limite", "visibilidade", "ativa"])
-    st.dataframe(em_reais(vis, "limite")[cols],
-                 hide_index=True, use_container_width=True,
-                 column_config={"nome": "Nome", "tipo": "Tipo", "instituicao": "Instituição",
-                                "dia_fechamento": "Fecha dia", "dia_vencimento": "Vence dia",
-                                "limite": col_rs("Limite"), "visibilidade": "Quem vê", "ativa": "Ativa"})
-
-st.divider()
-op = {None: "➕ Nova conta"} | {r.id: f"Editar: {r.nome}" for r in df.itertuples()}
-escolha = st.selectbox("O que fazer", list(op), format_func=op.get)
-atual = df[df["id"] == escolha].iloc[0].to_dict() if escolha else {}
 
 
 def _int(v):
     return None if v is None or pd.isna(v) else int(v)
 
 
-with st.form("conta", border=True):
-    c1, c2, c3 = st.columns(3)
-    nome = c1.text_input("Nome", atual.get("nome", ""), placeholder="Ex.: Latam Black")
-    tipos = list(TIPOS_CONTA)
-    tipo = c2.selectbox("Tipo", tipos, index=tipos.index(atual.get("tipo", "conta_corrente")),
-                        format_func=TIPOS_CONTA.get)
-    instituicao = c3.text_input("Instituição", atual.get("instituicao") or "", placeholder="Itaú, Nubank…")
+def _cadastro(escolha):
+    atual = df[df["id"] == escolha].iloc[0].to_dict() if escolha else {}
+    with st.form(f"conta_{escolha}", border=True):
+        c1, c2, c3 = st.columns(3)
+        nome = c1.text_input("Nome", atual.get("nome", ""), placeholder="Ex.: Latam Black")
+        tipos = list(TIPOS_CONTA)
+        tipo = c2.selectbox("Tipo", tipos, index=tipos.index(atual.get("tipo", "conta_corrente")),
+                            format_func=TIPOS_CONTA.get)
+        instituicao = c3.text_input("Instituição", atual.get("instituicao") or "", placeholder="Itaú, Nubank…")
 
-    st.caption("Só para cartão de crédito:")
-    c1, c2, c3 = st.columns(3)
-    fech = c1.number_input("Dia de fechamento", 0, 31, _int(atual.get("dia_fechamento")) or 0,
-                           help="0 = não sei (o app assume 7 dias antes do vencimento)")
-    venc = c2.number_input("Dia de vencimento", 0, 31, _int(atual.get("dia_vencimento")) or 0)
-    limite = c3.number_input("Limite (R$)", 0.0, value=float(atual.get("limite") or 0), step=500.0)
-    bancos = df[df["tipo"].isin(["conta_corrente", "poupanca", "carteira"]) & (df["id"] != escolha)]
-    op_deb = {None: "— não tem função débito"} | {r.id: r.nome for r in bancos.itertuples()}
-    deb_atual = atual.get("conta_debito_id")
-    deb_atual = None if deb_atual is None or pd.isna(deb_atual) else deb_atual
-    c1, c2 = st.columns(2)
-    conta_deb = c1.selectbox("Função débito sai da conta", list(op_deb), format_func=op_deb.get,
-                             index=list(op_deb).index(deb_atual) if deb_atual in op_deb else 0,
-                             help="Se este cartão também passa no débito, de qual conta corrente sai o dinheiro. "
-                                  "Usado pela Caixa de entrada quando você escolhe Débito.")
-    op_pag = {None: "— não definida"} | {r.id: r.nome for r in bancos.itertuples()}
-    pag_atual = atual.get("conta_pagamento_id")
-    pag_atual = None if pag_atual is None or pd.isna(pag_atual) else pag_atual
-    conta_pag = c2.selectbox("Fatura paga pela conta", list(op_pag), format_func=op_pag.get,
-                             index=list(op_pag).index(pag_atual) if pag_atual in op_pag else 0,
-                             help="A fatura sai desta conta corrente no vencimento (entra no fluxo de caixa).")
+        st.caption("Só para cartão de crédito:")
+        c1, c2, c3 = st.columns(3)
+        fech = c1.number_input("Dia de fechamento", 0, 31, _int(atual.get("dia_fechamento")) or 0,
+                               help="0 = não sei (o app assume 7 dias antes do vencimento)")
+        venc = c2.number_input("Dia de vencimento", 0, 31, _int(atual.get("dia_vencimento")) or 0)
+        limite = c3.number_input("Limite (R$)", 0.0, value=float(atual.get("limite") or 0), step=500.0)
+        bancos = df[df["tipo"].isin(["conta_corrente", "poupanca", "carteira"]) & (df["id"] != escolha)]
+        op_deb = {None: "— não tem função débito"} | {r.id: r.nome for r in bancos.itertuples()}
+        deb_atual = atual.get("conta_debito_id")
+        deb_atual = None if deb_atual is None or pd.isna(deb_atual) else deb_atual
+        c1, c2 = st.columns(2)
+        conta_deb = c1.selectbox("Função débito sai da conta", list(op_deb), format_func=op_deb.get,
+                                 index=list(op_deb).index(deb_atual) if deb_atual in op_deb else 0,
+                                 help="Se este cartão também passa no débito, de qual conta corrente sai o dinheiro. "
+                                      "Usado pela Caixa de entrada quando você escolhe Débito.")
+        op_pag = {None: "— não definida"} | {r.id: r.nome for r in bancos.itertuples()}
+        pag_atual = atual.get("conta_pagamento_id")
+        pag_atual = None if pag_atual is None or pd.isna(pag_atual) else pag_atual
+        conta_pag = c2.selectbox("Fatura paga pela conta", list(op_pag), format_func=op_pag.get,
+                                 index=list(op_pag).index(pag_atual) if pag_atual in op_pag else 0,
+                                 help="A fatura sai desta conta corrente no vencimento (entra no fluxo de caixa).")
 
-    c1, c2 = st.columns(2)
-    vis_keys = list(VISIBILIDADES)
-    visib = c1.selectbox("Quem vê os lançamentos desta conta", vis_keys,
-                         index=vis_keys.index(atual.get("visibilidade", "privado")),
-                         format_func=VISIBILIDADES.get)
-    ativa = c2.toggle("Conta ativa", value=bool(atual.get("ativa", True)))
+        c1, c2 = st.columns(2)
+        vis_keys = list(VISIBILIDADES)
+        visib = c1.selectbox("Quem vê os lançamentos desta conta", vis_keys,
+                             index=vis_keys.index(atual.get("visibilidade", "privado")),
+                             format_func=VISIBILIDADES.get)
+        ativa = c2.toggle("Conta ativa", value=bool(atual.get("ativa", True)))
 
-    from telas import _ui
-    cor_atual = atual.get("cor") if isinstance(atual.get("cor"), str) and atual.get("cor") else None
-    padrao = _ui.banco(atual.get("nome", ""), atual.get("instituicao"))["c1"]
-    c1, c2 = st.columns([1, 2], vertical_alignment="bottom")
-    cor_propria = c1.toggle("Escolher a cor", value=cor_atual is not None,
-                            help="Desligado: usa a cor do banco/cartão. Ligado: usa a cor que você escolher.")
-    cor = c2.color_picker("Cor do cartão/conta", cor_atual or padrao)
+        from telas import _ui
+        cor_atual = atual.get("cor") if isinstance(atual.get("cor"), str) and atual.get("cor") else None
+        padrao = _ui.banco(atual.get("nome", ""), atual.get("instituicao"))["c1"]
+        c1, c2 = st.columns([1, 2], vertical_alignment="bottom")
+        cor_propria = c1.toggle("Escolher a cor", value=cor_atual is not None,
+                                help="Desligado: usa a cor do banco/cartão. Ligado: usa a cor que você escolher.")
+        cor = c2.color_picker("Cor do cartão/conta", cor_atual or padrao)
 
-    if st.form_submit_button("Salvar", type="primary"):
-        if not nome.strip():
-            st.error("Dê um nome para a conta.")
-        else:
-            repo.salvar_conta(u, dict(nome=nome.strip(), tipo=tipo, instituicao=instituicao or None,
-                                      dia_fechamento=fech or None, dia_vencimento=venc or None,
-                                      limite=limite or None, visibilidade=visib, ativa=ativa,
-                                      conta_debito_id=conta_deb if tipo == "cartao_credito" else None,
-                                      conta_pagamento_id=conta_pag if tipo == "cartao_credito" else None,
-                                      cor=cor if cor_propria else None,
-                                      saldo_inicial=atual.get("saldo_inicial"),
-                                      data_saldo_inicial=atual.get("data_saldo_inicial")),
-                              conta_id=escolha)
-            st.session_state["_ok_conta"] = f"Conta **{nome}** salva."
-            st.rerun()
+        if st.form_submit_button("Salvar", type="primary"):
+            if not nome.strip():
+                st.error("Dê um nome para a conta.")
+            else:
+                repo.salvar_conta(u, dict(nome=nome.strip(), tipo=tipo, instituicao=instituicao or None,
+                                          dia_fechamento=fech or None, dia_vencimento=venc or None,
+                                          limite=limite or None, visibilidade=visib, ativa=ativa,
+                                          conta_debito_id=conta_deb if tipo == "cartao_credito" else None,
+                                          conta_pagamento_id=conta_pag if tipo == "cartao_credito" else None,
+                                          cor=cor if cor_propria else None,
+                                          saldo_inicial=atual.get("saldo_inicial"),
+                                          data_saldo_inicial=atual.get("data_saldo_inicial")),
+                                  conta_id=escolha)
+                st.session_state["_ok_conta"] = f"Conta **{nome}** salva."
+                st.rerun()
 
-if escolha:
-    n_lanc = repo.qtd_lancamentos_conta(u, escolha)
-    with st.popover("🗑️ Excluir conta"):
-        if n_lanc:
-            st.caption(f"Esta conta tem **{n_lanc} lançamentos**. Excluir apaga a conta e deixa os lançamentos "
-                       "sem conta. Se só não usa mais, prefira desligar **Conta ativa** (some das listas, "
-                       "mas o histórico fica).")
-        else:
-            st.caption("Conta sem lançamentos — pode excluir sem perder nada.")
-        if st.button("Excluir de vez", type="primary"):
-            repo.excluir_conta(u, escolha)
-            st.session_state["_ok_conta"] = "Conta excluída."
-            st.rerun()
+    if escolha:
+        n_lanc = repo.qtd_lancamentos_conta(u, escolha)
+        with st.popover("🗑️ Excluir conta"):
+            if n_lanc:
+                st.caption(f"Esta conta tem **{n_lanc} lançamentos**. Excluir apaga a conta e deixa os lançamentos "
+                           "sem conta. Se só não usa mais, prefira desligar **Conta ativa** (some das listas, "
+                           "mas o histórico fica).")
+            else:
+                st.caption("Conta sem lançamentos — pode excluir sem perder nada.")
+            if st.button("Excluir de vez", type="primary"):
+                repo.excluir_conta(u, escolha)
+                st.session_state["_ok_conta"] = "Conta excluída."
+                st.rerun()
+
+
+@st.dialog("Conta / cartão")
+def _ficha(escolha):
+    _cadastro(escolha)
+
+
+if cel:
+    if st.button("Nova conta ou cartão", icon=":material/add:", type="primary", width="stretch", key="nova_conta"):
+        _ficha(None)
+if cel and not df.empty:
+    ordem = {"conta_corrente": 0, "carteira": 1, "poupanca": 2, "cartao_credito": 3}
+    lst = df.assign(_o=df["tipo"].map(ordem).fillna(9), _a=~df["ativa"].astype(bool)).sort_values(["_a", "_o", "nome"])
+    with st.container(key="llista_contas"):
+        for r in lst.itertuples():
+            sub = [TIPOS_CONTA.get(r.tipo, r.tipo)]
+            if isinstance(r.instituicao, str) and r.instituicao and r.instituicao not in r.nome:
+                sub.append(r.instituicao)
+            if r.tipo == "cartao_credito" and pd.notna(r.dia_vencimento):
+                sub.append(f"vence dia {int(r.dia_vencimento)}")
+            lim = float(r.limite) if pd.notna(r.limite) and r.limite else 0
+            if _ui.linha(f"c_{r.id}", f"<div class='sel'>{_ui.selo(r.nome, r.instituicao, 42)}</div>", r.nome,
+                         " · ".join(sub), valor=brl(lim) if lim else "",
+                         chip="" if r.ativa else "Inativa", chip_cls="mute"):
+                _ficha(r.id)
+if not cel and not df.empty:
+    cols = ["nome", "tipo", "instituicao", "dia_fechamento", "dia_vencimento", "limite", "visibilidade", "ativa"]
+    st.dataframe(em_reais(vis, "limite")[cols],
+                 hide_index=True, use_container_width=True,
+                 column_config={"nome": "Nome", "tipo": "Tipo", "instituicao": "Instituição",
+                                "dia_fechamento": "Fecha dia", "dia_vencimento": "Vence dia",
+                                "limite": col_rs("Limite"), "visibilidade": "Quem vê", "ativa": "Ativa"})
+if not cel:
+    st.divider()
+    op = {None: "➕ Nova conta"} | {r.id: f"Editar: {r.nome}" for r in df.itertuples()}
+    _cadastro(st.selectbox("O que fazer", list(op), format_func=op.get))
 
 st.caption("Saldos: em **Contas correntes** (informar saldo real) e **Patrimônio** (FGTS, financiamento). "
            "Aplicações: em **Investimentos**.")
