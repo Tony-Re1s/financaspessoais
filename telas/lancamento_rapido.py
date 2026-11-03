@@ -16,6 +16,21 @@ _ui.titulo("Lançamento rápido", "⚡")
 if msg := st.session_state.pop("_ok_rapido", None):
     st.success(msg, icon=":material/check_circle:")
 
+# Caixa de entrada à mão: compras que chegaram sozinhas (Apple Pay / notificação) esperando conferência
+try:
+    from core import caixa as _cx
+    _n_cx = _cx.qtd_pendentes(u)
+except Exception:  # noqa: BLE001
+    _n_cx = 0
+with st.container(key="pendencias"):
+    with st.container(key="pend_medio_cx" if _n_cx else "pend_info_cx"):
+        try:   # só aparece para quem tem a Caixa de entrada no menu
+            st.page_link("telas/caixa_entrada.py", icon=":material/inbox:", width="stretch",
+                         label=(f"**Caixa de entrada · {_n_cx}**  \n{'compra' if _n_cx == 1 else 'compras'} para conferir e lançar"
+                                if _n_cx else "**Caixa de entrada**  \nnada esperando agora"))
+        except Exception:  # noqa: BLE001
+            pass
+
 if not ia.chave():
     st.warning("Para usar a IA, coloque a sua chave da Anthropic nos **Secrets** do app:", icon=":material/key:")
     st.code('[anthropic]\napi_key = "sk-ant-..."', language="toml")

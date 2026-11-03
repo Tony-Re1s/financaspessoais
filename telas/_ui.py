@@ -443,6 +443,20 @@ if(!window.__finMais){window.__finMais=1;
     },60);},true);}
 }catch(e){}})();
 (function(){try{
+/* depois de uma atualização, o app salvo no celular pode pedir arquivos que não existem mais
+   ("Importing a module script failed"): recarrega uma vez sozinho */
+if(window.__finRecup) return; window.__finRecup=1;
+const W=(window.parent&&window.parent!==window)?window.parent:window, K="fin-recarregou";
+const RE=/Importing a module script failed|dynamically imported module|error loading dynamically/i;
+setInterval(function(){try{
+  const els=document.querySelectorAll('[data-testid="stException"],[data-testid="stAlert"],[data-testid="stAlertContainer"]');
+  for(const e of els){ if(RE.test(e.textContent||"")){
+    const t=+(W.sessionStorage.getItem(K)||0);
+    if(Date.now()-t>120000){W.sessionStorage.setItem(K,String(Date.now())); W.location.reload();}
+    return; } }
+}catch(e){}},2000);
+}catch(e){}})();
+(function(){try{
 const P=window.parent; if(!P||P===window) return; const d=P.document;
 const T="Finanças", L=window.location, k=L.pathname.indexOf("/~/+/");
 const B=L.origin+(k>=0? L.pathname.slice(0,k)+"/~/+/" : "/");   /* no Streamlit Cloud o app (e o /app/static) mora em /~/+/ */
@@ -482,6 +496,7 @@ def marca():
 def barra_abas(itens: list[tuple[str, str, str]], atual: str = ""):
     """Barra fixa embaixo, só no celular. itens: (página, rótulo, ícone); o último botão, "Mais", abre o menu."""
     from pathlib import Path
+    atual = {"caixa_entrada": "lancamento_rapido", "novo_lancamento": "lancamento_rapido"}.get(atual, atual)
     with st.container(key="tabbar"):
         cols = st.columns(len(itens) + 1)
         for i, (col, (pag, rot, ic)) in enumerate(zip(cols, itens)):
