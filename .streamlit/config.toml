@@ -1,9 +1,18 @@
 [theme]
-primaryColor = "#0F766E"
 base = "light"
+primaryColor = "#0B7A66"            # menta escuro (texto branco legível nos botões)
+backgroundColor = "#F3F5F8"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#111827"               # grafite
+font = "Nunito:https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap"
+headingFont = "Nunito:https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap"
+baseRadius = "large"
 
 [server]
 runOnSave = true
+enableStaticServing = true          # ícone do atalho do celular (static/icone-180.png)
+# sai para o app do banco e volta: a sessão (tela, filtros) fica guardada por até 1 hora
+disconnectedSessionTTL = 3600
 
 [client]
 toolbarMode = "minimal"

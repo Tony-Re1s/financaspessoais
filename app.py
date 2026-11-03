@@ -7,15 +7,16 @@ import streamlit as st
 from core import auth, caixa, db, recorrencias
 from core.fmt import hoje
 from telas import _ui
-from telas._comum import CSS, e_celular
+from telas._comum import CSS
 
 _OLHO_JS = __import__("pathlib").Path(__file__).parent / "static" / "olho.js"
 
-st.set_page_config(page_title="Finanças", page_icon="💰", layout="wide",
+_ST = __import__("pathlib").Path(__file__).parent / "static"
+st.set_page_config(page_title="Finanças", page_icon=str(_ST / "icone-180.png"), layout="wide",
                    initial_sidebar_state="auto")
 st.markdown(CSS, unsafe_allow_html=True)
 _ui.css()
-_ST = __import__("pathlib").Path(__file__).parent / "static"
+_ui.marca()
 st.logo(str(_ST / "marca.svg"), size="large", icon_image=str(_ST / "marca-icone.svg"))
 
 db.migrar()
@@ -62,7 +63,8 @@ def perm_ok(chave):
 
 paginas = {
     "Visão geral": [
-        _p(None, "telas/painel.py", title="Painel", icon=":material/dashboard:", default=True),
+        _p(None, "telas/inicio.py", title="Início", icon=":material/home:", default=True),
+        _p(None, "telas/painel.py", title="Fluxo de caixa", icon=":material/monitoring:"),
         _p(None, "telas/orcamentos.py", title="Orçamentos", icon=":material/track_changes:"),
         _p(None, "telas/assistente.py", title="Assistente IA", icon=":material/auto_awesome:"),
         _p(None, "telas/imposto_renda.py", title="Imposto de Renda", icon=":material/receipt_long:"),
@@ -110,7 +112,15 @@ with st.sidebar:
         _ui.render(f"""<div class="ui-perfil">{_ui.avatar(usuario, 38)}
             <div style="min-width:0"><div class="n">{_ui.esc(_nome)}{'<span class="adm">admin</span>' if usuario['admin'] else ''}</div>
             <div class="e">{_ui.esc(usuario['email'])}</div></div></div>""")
-        st.toggle("📱 Layout de celular", value=e_celular(), key="modo_celular")
         st.button("Sair", icon=":material/logout:", on_click=auth.sair, use_container_width=True)
+
+# barra de abas fixa embaixo (só no celular) — o "Mais" abre o menu lateral com o resto
+_abas = [("telas/inicio.py", "Início", ":material/home:"),
+         ("telas/lancamento_rapido.py", "Lançar", ":material/add_circle:"),
+         ("telas/lancamentos.py", "Lançamentos", ":material/receipt_long:"),
+         ("telas/contas_correntes.py", "Contas", ":material/account_balance_wallet:")]
+_registradas = {pg.url_path for lista in paginas.values() for pg in lista}
+_abas = [a for a in _abas if __import__("pathlib").Path(a[0]).stem in _registradas or a[0] == "telas/inicio.py"]
+_ui.barra_abas(_abas, atual=nav.url_path)
 
 nav.run()

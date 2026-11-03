@@ -14,7 +14,7 @@ cel = e_celular()
 _ui.aviso_ok()
 topo_esq, topo_dir = st.columns([3, 1], vertical_alignment="bottom")
 with topo_esq:
-    _ui.titulo("Painel", "🏠")
+    _ui.titulo("Fluxo de caixa", "💧")
 with topo_dir:
     escopo = seletor_escopo()
 
@@ -108,11 +108,11 @@ with st.container(border=True):
     else:
         faixa = pd.DataFrame({"ini": [pd.Timestamp(_ini(sel))], "fim": [pd.Timestamp(_fim(sel))]})
         base = alt.Chart(diario).encode(x=alt.X("data:T", title=None, axis=alt.Axis(format="%b/%y", grid=False)))
-        area = base.mark_area(opacity=.14, color="#0F766E", interpolate="step-after").encode(
+        area = base.mark_area(opacity=.14, color="#0B7A66", interpolate="step-after").encode(
             y=alt.Y("saldo:Q", title=None, axis=alt.Axis(format=",.0f", gridOpacity=.2)))
         linha = base.mark_line(strokeWidth=2.4, interpolate="step-after").encode(
             y="saldo:Q",
-            color=alt.Color("tipo:N", scale=alt.Scale(domain=["Real", "Previsto"], range=["#0F766E", "#6366F1"]),
+            color=alt.Color("tipo:N", scale=alt.Scale(domain=["Real", "Previsto"], range=["#0B7A66", "#64748B"]),
                             legend=alt.Legend(title=None, orient="top")),
             strokeDash=alt.StrokeDash("tipo:N", scale=alt.Scale(domain=["Real", "Previsto"],
                                                                 range=[[1, 0], [6, 4]]), legend=None),
@@ -142,7 +142,7 @@ with st.container(border=True):
         xOffset=alt.XOffset("tipo:N", sort=["Entradas", "Saídas"]),
         y=alt.Y("valor:Q", title=None, axis=alt.Axis(format=",.0f", gridOpacity=.2)),
         color=alt.Color("tipo:N", scale=alt.Scale(domain=["Entradas", "Saídas", "Saldo final"],
-                                                  range=["#16A34A", "#E5484D", "#6366F1"]),
+                                                  range=["#16A34A", "#E5484D", "#64748B"]),
                         legend=alt.Legend(title=None, orient="top")),
         tooltip=[alt.Tooltip("rotulo:N", title="Mês"), alt.Tooltip("tipo:N", title=""),
                  alt.Tooltip("valor:Q", title="R$", format=",.2f")])
@@ -420,12 +420,12 @@ st.markdown("""<style>
 .ui-fluxo table {border-collapse: separate; border-spacing: 0; width: 100%; font-size: .82rem; white-space: nowrap;}
 .ui-fluxo th, .ui-fluxo td {padding: 7px 10px; text-align: right; border-bottom: 1px solid rgba(15,23,42,.06);}
 .ui-fluxo thead th {font-size: .74rem; text-transform: uppercase; letter-spacing: .5px; color: #64748B;}
-.ui-fluxo thead th.fut {color: #6366F1;}
+.ui-fluxo thead th.fut {color: #64748B;}
 .ui-fluxo tbody th {text-align: left; font-weight: 600; color: #334155; position: sticky; left: 0; background: #fff;}
 .ui-fluxo td.pos {color: #16A34A;} .ui-fluxo td.neg {color: #E5484D;}
 .ui-fluxo td.fim {font-weight: 800; color: #0F172A;}
-.ui-fluxo .sel {background: rgba(15,118,110,.08);}
-.ui-fluxo thead th.sel {color: #0F766E; font-weight: 800; border-bottom: 2px solid #0F766E;}
+.ui-fluxo .sel {background: rgba(11,122,102,.08);}
+.ui-fluxo thead th.sel {color: #0B7A66; font-weight: 800; border-bottom: 2px solid #0B7A66;}
 @media (max-width: 640px) {
   .st-key-painel_mes [role="radiogroup"] {flex-wrap: nowrap !important; overflow-x: auto; padding-bottom: 6px;
        scrollbar-width: none;}

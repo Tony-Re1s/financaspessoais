@@ -31,7 +31,10 @@ op_todas = {r.id: r.nome for r in contas.itertuples()}
 op_cat_d = opcoes_categoria(repo.categorias(u), "despesa")
 op_cat_r = opcoes_categoria(repo.categorias(u), "receita")
 
-modo = st.segmented_control("Como", ["foto", "voz", "texto"], default="foto", label_visibility="collapsed",
+if _m := st.session_state.pop("_rapido_modo", None):   # atalho do Início (Falar gasto / Foto)
+    st.session_state["rap_modo"] = _m
+modo = st.segmented_control("Como", ["foto", "voz", "texto"], key="rap_modo", label_visibility="collapsed",
+                            default=None if "rap_modo" in st.session_state else "foto",
                             format_func={"foto": "📷 Foto", "voz": "🎤 Voz", "texto": "✍️ Texto"}.get) or "foto"
 _VOZ_JS = __import__("pathlib").Path(__file__).parent.parent / "static" / "voz.js"
 auto = False
@@ -48,8 +51,8 @@ with st.container(border=True):
             st.markdown("""<style>
 .st-key-voz_btn {align-items: center; text-align: center;}
 .fin-mic {width: 100%; padding: 22px 16px; border-radius: 18px; border: 0; cursor: pointer; font-size: 1.15rem;
-  font-weight: 800; color: #fff; background: linear-gradient(135deg, #0F766E, #14B8A6);
-  box-shadow: 0 8px 24px rgba(15,118,110,.25);}
+  font-weight: 800; color: #fff; background: linear-gradient(135deg, #0B7A66, #14B8A6);
+  box-shadow: 0 8px 24px rgba(11,122,102,.25);}
 .fin-mic.on {background: linear-gradient(135deg, #B91C1C, #EF4444); animation: fin-pulso 1.2s infinite;}
 .fin-mic:disabled {opacity: .5; cursor: default;}
 .fin-mic-info {font-size: .82rem; opacity: .75; margin-top: 8px; min-height: 1em;}

@@ -27,12 +27,20 @@ def e_celular() -> bool:
     return any(k in ua for k in ("iphone", "android", "mobile", "ipad"))
 
 
+# paleta Grafite & menta: os degradês "de tela" (sem significado) viram grafite; vermelho (alerta) e as cores das
+# marcas de banco/cartão continuam como vierem
+GRAFITE = ("#0F172A", "#134E48")
+_NEUTROS = {"#1F2A44", "#0B4F45", "#272B66", "#4A2A12", "#123B5C", "#3B1F6E", "#0B7A66"}
+
+
 def cartoes_kpi(itens: list[tuple[str, str]], titulo: str | None = None, icone: str = "Σ", destaque: int | None = 0,
-                sub: str = "", direita: str = "", c1: str = "#1F2A44", c2: str = "#3B4C75"):
+                sub: str = "", direita: str = "", c1: str | None = None, c2: str | None = None):
     """Indicadores no padrão do app: card principal com degradê.
     Com título: o item `destaque` vira o valor grande e os outros os quadradinhos.
     Sem título: só os quadradinhos dentro do card (4 por linha; 2 no celular)."""
     from telas import _ui
+    if not c1 or c1.upper() in _NEUTROS:
+        c1, c2 = GRAFITE
     selo = (f"<div class='ui-selo ui-selo-txt' style='width:40px;height:40px;background:rgba(255,255,255,.2);"
             f"font-size:1.15rem'>{icone}</div>")
     if titulo and destaque is not None and itens:
@@ -55,7 +63,7 @@ CSS = """
 #fin-olho {position: absolute; top: 3.6rem; right: 1rem; z-index: 5; width: 42px; height: 38px; border-radius: 99px;
            border: 1px solid rgba(128,128,128,.3); background: var(--background-color, #fff); color: inherit;
            display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;}
-#fin-olho:hover {border-color: #0E7C6B; color: #0E7C6B;}
+#fin-olho:hover {border-color: #0B7A66; color: #0B7A66;}
 @media (max-width: 640px) {#fin-olho {top: 4.6rem; right: .4rem;}}
 html.fin-oculto [data-testid="stVegaLiteChart"], html.fin-oculto [data-testid="stArrowVegaLiteChart"],
 html.fin-oculto [data-testid="stPlotlyChart"], html.fin-oculto [data-testid="stMetricValue"],
@@ -64,9 +72,9 @@ html.fin-oculto [data-testid="stMetricDelta"] {filter: blur(9px); pointer-events
 
 /* ---------- fundo da área central ---------- */
 [data-testid="stAppViewContainer"], .stApp {
-    background: radial-gradient(1100px 420px at 88% -8%, rgba(45,212,191,.20), transparent 62%),
-                radial-gradient(900px 400px at 8% -6%, rgba(99,102,241,.14), transparent 60%),
-                linear-gradient(180deg, #F1F5FA 0%, #EDF1F7 100%) !important;
+    background: radial-gradient(1100px 420px at 88% -8%, rgba(52,211,153,.16), transparent 62%),
+                radial-gradient(900px 400px at 8% -6%, rgba(15,23,42,.07), transparent 60%),
+                linear-gradient(180deg, #F3F5F8 0%, #EEF1F5 100%) !important;
     background-attachment: fixed !important;}
 [data-testid="stHeader"] {background: transparent !important;}
 .ui-card, .ui-lista-html, [class*="st-key-uilista"] {background: #fff !important;}
@@ -78,13 +86,13 @@ html.fin-oculto [data-testid="stMetricDelta"] {filter: blur(9px); pointer-events
     gap: 8px !important; flex-wrap: wrap;}
 [data-testid="stButtonGroup"] button[data-variant] {
     border-radius: 99px !important; margin: 0 !important; padding: 6px 16px !important;
-    border: 1px solid rgba(15,118,110,.22) !important; background: #fff !important;
-    box-shadow: 0 1px 4px rgba(17,24,39,.06); color: #134E4A !important; transition: all .15s;}
-[data-testid="stButtonGroup"] button[data-variant]:hover {border-color: #0F766E !important; background: #F0FDFA !important;}
+    border: 1px solid rgba(11,122,102,.22) !important; background: #fff !important;
+    box-shadow: 0 1px 4px rgba(17,24,39,.06); color: #111827 !important; transition: all .15s;}
+[data-testid="stButtonGroup"] button[data-variant]:hover {border-color: #0B7A66 !important; background: #ECFDF5 !important;}
 [data-testid="stButtonGroup"] button[data-variant][aria-checked="true"],
 [data-testid="stButtonGroup"] button[data-variant][data-selected="true"] {
-    background: linear-gradient(135deg, #0F766E, #14A391) !important; border-color: transparent !important;
-    color: #fff !important; box-shadow: 0 6px 16px rgba(15,118,110,.32) !important;}
+    background: linear-gradient(135deg, #0B7A66, #10A58A) !important; border-color: transparent !important;
+    color: #fff !important; box-shadow: 0 6px 16px rgba(11,122,102,.32) !important;}
 [data-testid="stButtonGroup"] button[data-variant][aria-checked="true"] p,
 [data-testid="stButtonGroup"] button[data-variant][data-selected="true"] p {color: #fff !important; font-weight: 700;}
 [data-testid="stButtonGroup"] button[data-variant][aria-checked="true"] p::before,
@@ -113,13 +121,13 @@ h2, h3 {font-weight: 800 !important; letter-spacing: -.3px;}
 .stButton > button, .stFormSubmitButton > button, .stDownloadButton > button, [data-testid="stPageLink"] a,
 [data-testid="stPopover"] > div > button {border-radius: 12px !important; font-weight: 600;}
 .stButton > button[kind="primary"], .stFormSubmitButton > button[kind="primaryFormSubmit"] {
-    box-shadow: 0 6px 16px rgba(15,118,110,.25);}
+    box-shadow: 0 6px 16px rgba(11,122,102,.25);}
 [data-testid="stButtonGroup"] button {border-radius: 10px !important;}
-[data-testid="stFileUploaderDropzone"] {border-radius: 16px; border: 1.5px dashed rgba(15,118,110,.45);
-    background: rgba(15,118,110,.04);}
+[data-testid="stFileUploaderDropzone"] {border-radius: 16px; border: 1.5px dashed rgba(11,122,102,.45);
+    background: rgba(11,122,102,.04);}
 
 /* ---------- menu lateral ---------- */
-[data-testid="stSidebar"] {background: linear-gradient(180deg, #17213A 0%, #22345C 100%) !important;}
+[data-testid="stSidebar"] {background: linear-gradient(180deg, #0B1220 0%, #1F2937 100%) !important;}
 [data-testid="stSidebar"] * {color: rgba(255,255,255,.88);}
 [data-testid="stSidebar"] [data-testid="stSidebarHeader"] {padding-bottom: .4rem;}
 [data-testid="stSidebarNav"] [data-testid="stNavSectionHeader"] {color: rgba(255,255,255,.5) !important;
@@ -127,23 +135,23 @@ h2, h3 {font-weight: 800 !important; letter-spacing: -.3px;}
 [data-testid="stSidebarNav"] [data-testid="stNavSectionHeader"] * {color: rgba(255,255,255,.5) !important;}
 [data-testid="stSidebarNavLink"] {border-radius: 12px; margin: 1px 0; transition: background .15s;}
 [data-testid="stSidebarNavLink"]:hover {background: rgba(255,255,255,.08) !important;}
-[data-testid="stSidebarNavLink"][aria-current="page"] {background: linear-gradient(135deg, #0F766E, #14A391) !important;
+[data-testid="stSidebarNavLink"][aria-current="page"] {background: linear-gradient(135deg, #0B7A66, #10A58A) !important;
     box-shadow: 0 6px 16px rgba(0,0,0,.25);}
 [data-testid="stSidebarNavLink"][aria-current="page"] * {color: #fff !important; font-weight: 700;}
 [data-testid="stSidebarNavLink"] span[data-testid="stIconMaterial"] {color: rgba(255,255,255,.7);}
 [data-testid="stSidebarNavSeparator"] {border-color: rgba(255,255,255,.12) !important;}
 [data-testid="stSidebar"] [data-testid="stSidebarNavViewButton"] {color: rgba(255,255,255,.7) !important;}
 [data-testid="stSidebar"] hr {border-color: rgba(255,255,255,.14);}
-[data-testid="stSidebar"] a {color: #7FE0D2 !important;}
+[data-testid="stSidebar"] a {color: #6EE7B7 !important;}
 [data-testid="stSidebar"] .stButton > button {background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);}
 [data-testid="stSidebar"] .stButton > button:hover {background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.35);}
 [data-testid="stSidebar"] [data-testid="stCaptionContainer"] {opacity: 1;}
 [data-testid="stSidebar"] [data-testid="stCheckbox"] label > span + div {background: rgba(255,255,255,.28) !important;}
-[data-testid="stSidebar"] [data-testid="stCheckbox"] label:has(input:checked) > span + div {background: #14A391 !important;}
+[data-testid="stSidebar"] [data-testid="stCheckbox"] label:has(input:checked) > span + div {background: #10A58A !important;}
 .st-key-perfil {background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); border-radius: 16px;
     padding: 12px 12px 10px; margin-top: .4rem;}
 .ui-perfil {display: flex; align-items: center; gap: 10px;}
-.ui-perfil .av {width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg,#0F766E,#14A391);
+.ui-perfil .av {width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg,#0B7A66,#10A58A);
     display: flex; align-items: center; justify-content: center; font-weight: 800; color: #fff; flex-shrink: 0;}
 .ui-perfil .n {font-weight: 700; font-size: .92rem; color: #fff;}
 .ui-perfil .e {font-size: .74rem; opacity: .65; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;}

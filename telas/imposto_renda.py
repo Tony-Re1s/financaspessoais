@@ -81,7 +81,7 @@ for k, nome, expl in [("simplificada", "Simplificada", f"20% dos tributáveis, a
                       ("completa", "Completa", "INSS + saúde + educação + previdência privada + dependentes")]:
     d = r[k]
     s = d["saldo"]
-    sel = " style='outline:3px solid #0F766E;outline-offset:2px'" if r["melhor"] == k else ""
+    sel = " style='outline:3px solid #0B7A66;outline-offset:2px'" if r["melhor"] == k else ""
     cards.append(f"""<div class="ui-card"{sel}><div style="min-width:0;width:100%">
         <div class="n">{nome}{' · ✓ melhor' if r['melhor'] == k else ''}</div>
         <div class="s">{'Restitui' if s < 0 else 'Paga'} {brl(abs(s))}</div>
@@ -262,5 +262,5 @@ st.markdown("""<style>
 .ui-fluxo thead th.fut, .ui-fluxo td.proj {color: #94A3B8; font-style: italic;}
 .ui-fluxo tbody th {text-align: left; font-weight: 600; color: #334155; position: sticky; left: 0; background: #fff;}
 .ui-fluxo td[data-c=neg] {color: #E5484D;} .ui-fluxo td[data-c=pos] {color: #16A34A;}
-.ui-fluxo td[data-c=fim] {font-weight: 800;} .ui-fluxo td.tot {font-weight: 800; background: rgba(15,118,110,.06);}
+.ui-fluxo td[data-c=fim] {font-weight: 800;} .ui-fluxo td.tot {font-weight: 800; background: rgba(11,122,102,.06);}
 </style>""", unsafe_allow_html=True)

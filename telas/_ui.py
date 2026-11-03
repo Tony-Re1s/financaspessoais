@@ -186,12 +186,12 @@ CSS = """
 .ui-cab .tt {display: flex; align-items: center; gap: 12px; margin-top: 12px; font-size: 2.15rem; font-weight: 800;
              letter-spacing: -.8px; line-height: 1.1; color: #0F172A;}
 .ui-cab .tt .ic {width: 46px; height: 46px; border-radius: 14px; display: flex; align-items: center;
-     justify-content: center; font-size: 1.45rem; background: linear-gradient(135deg, #0F766E, #2DD4BF);
-     box-shadow: 0 8px 18px rgba(15,118,110,.28); flex-shrink: 0;}
+     justify-content: center; font-size: 1.45rem; background: linear-gradient(135deg, #0B7A66, #34D399);
+     box-shadow: 0 8px 18px rgba(11,122,102,.28); flex-shrink: 0;}
 .ui-cab .sub {margin-top: 6px; font-size: .9rem; color: #475569; max-width: 760px;}
 .ui-av {border-radius: 50%; object-fit: cover; flex-shrink: 0; box-shadow: 0 0 0 2px #fff, 0 3px 10px rgba(0,0,0,.15);}
 .ui-av-txt {display: flex; align-items: center; justify-content: center; font-weight: 800; color: #fff;
-            background: linear-gradient(135deg, #0F766E, #14A391);}
+            background: linear-gradient(135deg, #0B7A66, #10A58A);}
 @media (max-width: 640px) {
   .ui-cab .tt {font-size: 1.65rem; gap: 10px;} .ui-cab .tt .ic {width: 38px; height: 38px; font-size: 1.15rem;}
 }
@@ -202,7 +202,7 @@ CSS = """
 .ui-cat .t {display: flex; justify-content: space-between; gap: 10px; font-weight: 600; font-size: .92rem;}
 .ui-cat .t .v {white-space: nowrap;}
 .ui-cat .barra {height: 7px; border-radius: 99px; background: rgba(128,128,128,.14); margin-top: 6px; overflow: hidden;}
-.ui-cat .barra > div {height: 100%; border-radius: 99px; background: linear-gradient(90deg, #0F766E, #2DD4BF);}
+.ui-cat .barra > div {height: 100%; border-radius: 99px; background: linear-gradient(90deg, #0B7A66, #34D399);}
 .ui-cat .p {font-size: .72rem; opacity: .6; margin-top: 3px;}
 /* listas com botão de editar por linha: card com sombra, linhas sem quebra no celular */
 [class*="st-key-uilista"] {border-radius: 16px; background: rgba(128,128,128,.05);
@@ -224,12 +224,154 @@ CSS = """
   [class*="st-key-uirow"] {padding: 6px 4px;}
   .ui-ic {width: 34px; height: 34px; font-size: .95rem;}
 }
+.st-key-marca_aba {position: absolute !important; height: 0; overflow: hidden;}
+/* ===== sem a cara do Streamlit: some "Running/Stop", Share/estrela/GitHub, menu ⋮, deploy e a faixa do topo ===== */
+[data-testid="stStatusWidget"], [data-testid="stToolbarActions"], [data-testid="stMainMenu"],
+[data-testid="stAppDeployButton"], [data-testid="stDecoration"], .stDeployButton,
+[data-testid="stToolbar"] [data-testid="stToolbarActionButton"] {display: none !important;}
+[data-testid="stSkeleton"] {opacity: 0 !important;}
+/* tudo em Nunito, grafite */
+html, body, [class*="css"], .stApp, button, input, textarea, select {font-family: 'Nunito', system-ui, sans-serif;}
+.ui-tudo-ok {background: #fff; border-radius: 16px; padding: 14px 16px; font-weight: 700; color: #0B7A66;
+     box-shadow: 0 2px 12px rgba(17,24,39,.06);}
+/* atalhos grandes do Início */
+.st-key-atalhos [data-testid="stHorizontalBlock"] {flex-wrap: nowrap !important; gap: .6rem !important;}
+.st-key-atalhos [data-testid="stColumn"] {min-width: 0 !important; flex: 1 1 0 !important; width: 0 !important;}
+.st-key-atalhos button {flex-direction: column !important; gap: 6px !important; min-height: 92px !important;
+     background: #fff !important; border: 0 !important; border-radius: 20px !important;
+     box-shadow: 0 2px 12px rgba(17,24,39,.07) !important; font-weight: 800 !important; color: #111827 !important;}
+.st-key-atalhos button > div > span {display: flex !important; flex-direction: column !important; align-items: center !important; gap: 6px !important;}
+.st-key-atalhos button span[data-testid="stIconMaterial"] {font-size: 1.6rem !important; color: #0B7A66 !important;
+     background: #DDF5EE; border-radius: 14px; width: 44px; height: 44px; display: flex !important;
+     align-items: center; justify-content: center;}
+.st-key-atalhos button p {font-size: .92rem !important; font-weight: 800 !important;}
+/* "Precisa de atenção": linhas tocáveis com › */
+.st-key-pendencias {background: #fff; border-radius: 20px; box-shadow: 0 2px 12px rgba(17,24,39,.06);
+     padding: 4px 0; gap: 0 !important;}
+.st-key-pendencias [data-testid="stPageLink"] a {padding: 10px 14px !important; border-radius: 0 !important;
+     border-bottom: 1px solid rgba(17,24,39,.06); background: transparent !important;}
+.st-key-pendencias [class*="st-key-pend_"]:last-child [data-testid="stPageLink"] a {border-bottom: 0;}
+.st-key-pendencias [data-testid="stPageLink"] a p {font-size: .88rem !important; line-height: 1.3 !important;
+     color: #5B6472 !important;}
+.st-key-pendencias [data-testid="stPageLink"] a p strong {color: #111827; font-size: .94rem;}
+.st-key-pendencias [data-testid="stPageLink"] a::after {content: "›"; margin-left: auto; font-size: 1.4rem;
+     color: #94A3B8; padding-left: 8px;}
+[class*="st-key-pend_alto"] span[data-testid="stIconMaterial"] {color: #C81E1E !important;}
+[class*="st-key-pend_medio"] span[data-testid="stIconMaterial"] {color: #B45309 !important;}
+[class*="st-key-pend_info"] span[data-testid="stIconMaterial"] {color: #0B7A66 !important;}
+/* ===== barra de abas fixa embaixo (só no celular) ===== */
+.st-key-tabbar {display: none !important;}
+@media (max-width: 640px) {
+  .st-key-tabbar {display: flex !important; position: fixed; left: 0; right: 0; bottom: 0; z-index: 999990;
+    background: rgba(255,255,255,.97); backdrop-filter: blur(8px); border-top: 1px solid rgba(17,24,39,.06);
+    box-shadow: 0 -6px 20px rgba(17,24,39,.08);
+    padding: 6px max(10px, env(safe-area-inset-left)) calc(10px + env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-right)) !important;}
+  .st-key-tabbar [data-testid="stHorizontalBlock"] {flex-wrap: nowrap !important; gap: 2px !important; width: 100%;
+    justify-content: space-between !important;}
+  .st-key-tabbar [data-testid="stColumn"] {min-width: 0 !important; flex: 1 1 0 !important; width: 0 !important;
+    max-width: none !important;}
+  .st-key-tabbar [data-testid="stColumn"] > div, .st-key-tabbar [data-testid="stColumn"] [data-testid="stVerticalBlock"],
+  .st-key-tabbar [data-testid="stElementContainer"], .st-key-tabbar [data-testid="stPageLink"],
+  .st-key-tabbar [data-testid="stMarkdown"], .st-key-tabbar [data-testid="stMarkdownContainer"] {width: 100% !important;}
+  .st-key-tabbar [data-testid="stPageLink"] a, .ui-mais {display: flex !important; flex-direction: column !important;
+    align-items: center !important; justify-content: center !important; gap: 2px !important; padding: 4px 1px !important;
+    width: 100% !important; box-sizing: border-box; text-align: center;
+    border-radius: 16px !important; background: transparent !important; cursor: pointer;}
+  .st-key-tabbar [data-testid="stElementContainer"], .st-key-tabbar [data-testid="stPageLink"],
+  .st-key-tabbar [data-testid="stPageLink"] > div, .st-key-tabbar [data-testid="stMarkdown"],
+  .st-key-tabbar [data-testid="stMarkdownContainer"] {margin: 0 !important; padding: 0 !important;}
+  .st-key-tabbar [data-testid="stPageLink"] a, .ui-mais {height: 60px !important; min-height: 60px !important; margin: 0 !important;}
+  .st-key-tabbar [data-testid="stPageLink"] a > span:first-child, .ui-mais .i {margin: 0 !important; height: 30px !important;
+    width: 50px !important; border-radius: 15px; display: flex !important; align-items: center !important;
+    justify-content: center !important;}
+  .st-key-tabbar [data-testid="stPageLink"] a > span:last-child {margin: 0 !important; height: 20px; display: flex;
+    align-items: center; justify-content: center; max-width: 100%;}
+  .st-key-tabbar [data-testid="stPageLink"] a span[data-testid="stIconMaterial"] {font-size: 1.6rem !important;
+    color: #5B6472 !important;}
+  .st-key-tabbar [data-testid="stPageLink"] a p, .ui-mais .r {font-size: .72rem !important; font-weight: 800 !important;
+    color: #5B6472 !important; margin: 0 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    line-height: 20px !important;}
+  .st-key-tab_on [data-testid="stPageLink"] a > span:first-child {background: #DDF5EE !important;}
+  .st-key-tabbar .st-key-tab_on [data-testid="stPageLink"] a p,
+  .st-key-tabbar .st-key-tab_on [data-testid="stPageLink"] a span[data-testid="stIconMaterial"] {color: #111827 !important;}
+  .ui-mais .i {font-family: "Material Symbols Rounded"; font-size: 1.6rem; line-height: 1; color: #5B6472;}
+  .block-container {padding-bottom: 7rem !important;}
+  /* no celular a barra de baixo substitui a faixa do topo (logo + botão do menu): o "Mais" abre o menu */
+  [data-testid="stHeader"] {display: none !important;}
+  .block-container {padding-top: .9rem !important;}
+  #fin-olho {top: .9rem !important;}
+}
 </style>
 """
+
+# Aba do navegador e atalho do celular (nome e ícone do app, em vez de "· Streamlit"), teclado certo no celular e o
+# "Mais" da barra de baixo abrindo/fechando o menu lateral. Atenção: dentro do <script> nada de "<" seguido de letra
+# (o filtro de HTML do Streamlit corta o script).
+_MARCA_ABA = """<script>(function(){try{
+if(!window.__finTeclado){window.__finTeclado=1;
+  const ajusta=()=>{
+    document.querySelectorAll('[data-testid="stNumberInput"] input').forEach(i=>{
+      if(i.getAttribute('inputmode')!=='decimal') i.setAttribute('inputmode','decimal');});
+    document.querySelectorAll('input[aria-label]').forEach(i=>{const l=i.getAttribute('aria-label')||'';
+      if(/e-?mail/i.test(l)&&i.getAttribute('inputmode')!=='email'){i.setAttribute('inputmode','email');i.setAttribute('autocapitalize','off');}});
+  };
+  let pend=false; const agenda=()=>{if(pend) return; pend=true; requestAnimationFrame(()=>{pend=false; ajusta();});};
+  new MutationObserver(agenda).observe(document.body,{childList:true,subtree:true}); ajusta();}
+if(!window.__finMais){window.__finMais=1;
+  const aberto=()=>{const sb=document.querySelector('[data-testid="stSidebar"]');
+    return !!sb && sb.getAttribute('data-collapsed')!=='true' && sb.getBoundingClientRect().right>40;};
+  const marca=e=>{if(e.target.closest && e.target.closest('.ui-mais')) window.__finMaisAberto=aberto();};
+  document.addEventListener('pointerdown',marca,true); document.addEventListener('touchstart',marca,true);
+  document.addEventListener('click',function(e){
+    if(!(e.target.closest && e.target.closest('.ui-mais'))) return;
+    const estava = window.__finMaisAberto===undefined ? aberto() : window.__finMaisAberto; window.__finMaisAberto=undefined;
+    setTimeout(()=>{const agora=aberto();
+      if(estava && agora){const b=document.querySelector('[data-testid="stSidebarCollapseButton"] button'); if(b) b.click();}
+      else if(!estava && !agora){const b=document.querySelector('[data-testid="stExpandSidebarButton"]'); if(b) b.click();}
+    },60);},true);}
+}catch(e){}})();
+(function(){try{
+const P=window.parent; if(!P||P===window) return; const d=P.document;
+const T="Finanças", I=window.location.origin+"/app/static/icone-180.png";
+function link(rel){let l=d.head.querySelector('link[rel="'+rel+'"]'); if(!l){l=d.createElement('link'); l.rel=rel; d.head.appendChild(l);} return l;}
+function meta(n,v){let m=d.head.querySelector('meta[name="'+n+'"]'); if(!m){m=d.createElement('meta'); m.name=n; d.head.appendChild(m);} if(m.content!==v) m.content=v;}
+function fix(){
+  if(d.title!==T) d.title=T;
+  d.head.querySelectorAll('link[rel~="icon"]').forEach(l=>{if(l.href!==I){l.href=I; l.type="image/png";}});
+  if(!d.head.querySelector('link[rel~="icon"]')){const l=link("icon"); l.href=I; l.type="image/png";}
+  const a=link("apple-touch-icon"); if(a.href!==I) a.href=I;
+  meta("apple-mobile-web-app-title",T); meta("application-name",T); meta("theme-color","#111827");
+  meta("apple-mobile-web-app-capable","yes");
+  if(!d.getElementById("fin-sem-selo")){const s=d.createElement("style"); s.id="fin-sem-selo";
+    s.textContent='@media (max-width:640px){[data-testid="manage-app-button"],[class*="viewerBadge"],[class*="_profileContainer"]{display:none!important}}';
+    d.head.appendChild(s);}
+}
+fix();
+if(!P.__finMarca){P.__finMarca=new P.MutationObserver(()=>fix()); P.__finMarca.observe(d.head,{subtree:true,childList:true,characterData:true,attributes:true});}
+}catch(e){}})();</script>"""
 
 
 def css():
     st.markdown(CSS, unsafe_allow_html=True)
+
+
+def marca():
+    """Uma vez por execução (no app.py): nome/ícone da aba, teclado certo e o "Mais" da barra de baixo."""
+    with st.container(key="marca_aba"):
+        st.html(_MARCA_ABA, unsafe_allow_javascript=True)
+
+
+def barra_abas(itens: list[tuple[str, str, str]], atual: str = ""):
+    """Barra fixa embaixo, só no celular. itens: (página, rótulo, ícone); o último botão, "Mais", abre o menu."""
+    from pathlib import Path
+    with st.container(key="tabbar"):
+        cols = st.columns(len(itens) + 1)
+        for i, (col, (pag, rot, ic)) in enumerate(zip(cols, itens)):
+            on = Path(pag).stem == atual or (not atual and i == 0)
+            with col.container(key="tab_on" if on else f"tab_{i}"):
+                st.page_link(pag, label=rot, icon=ic)
+        cols[-1].markdown("<div class='ui-mais'><span class='i'>menu</span><span class='r'>Mais</span></div>",
+                          unsafe_allow_html=True)
 
 
 DIAS_SEMANA = ["segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo"]
@@ -260,11 +402,11 @@ def titulo(texto: str, icone: str = "", sub: str = ""):
     render(f"""<div class="ui-cab">
         <div class="ola">{avatar(u, 34)}<div><b>{ola}{', ' + esc(primeiro) if primeiro else ''}!</b>
           <span>{data}</span></div></div>
-        <div class="tt">{f'<span class="ic">{icone}</span>' if icone else ''}<span>{esc(texto)}</span></div>
+        {f'<div class="tt">' + (f'<span class="ic">{icone}</span>' if icone else '') + f'<span>{esc(texto)}</span></div>' if texto else ''}
         {f'<div class="sub">{sub}</div>' if sub else ''}</div>""")
 
 
-def hero(titulo, rotulo, valor, minis: list[tuple[str, str]], c1="#1F2A44", c2="#3B4C75", selo_html="",
+def hero(titulo, rotulo, valor, minis: list[tuple[str, str]], c1="#0F172A", c2="#134E48", selo_html="",
          direita="", sub="", direita_html=""):
     minis_html = "".join(f"<div class='mini'><div class='l'>{esc(l)}</div><div class='v'>{esc(v)}</div></div>"
                          for l, v in minis)
