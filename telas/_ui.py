@@ -276,8 +276,10 @@ html, body, [class*="css"], .stApp, button, input, textarea, select {font-family
   gap: 0 !important; overflow: hidden;}
 [class*="st-key-lrow_"] {position: relative; gap: 0 !important; border-bottom: 1px solid rgba(17,24,39,.06);}
 [class*="st-key-lrow_"]:last-child {border-bottom: 0;}
-[class*="st-key-lrow_"] .stButton {position: absolute !important; inset: 0; z-index: 2; margin: 0 !important;}
-[class*="st-key-lrow_"] .stButton button {width: 100%; height: 100%; opacity: 0; min-height: 0 !important;}
+[class*="st-key-lrow_"] [data-testid="stElementContainer"]:has(.stButton) {position: absolute !important; inset: 0; z-index: 2;
+  height: auto !important; margin: 0 !important;}
+[class*="st-key-lrow_"] .stButton {position: absolute !important; inset: 0; margin: 0 !important; height: 100%;}
+[class*="st-key-lrow_"] .stButton button {width: 100%; height: 100% !important; opacity: 0; min-height: 0 !important;}
 [class*="st-key-lrow_"]:active {background: rgba(11,122,102,.06);}
 .ui-lrow {display: flex; align-items: center; gap: 12px; padding: 11px 14px;}
 .ui-lrow .dia {width: 42px; height: 42px; border-radius: 13px; background: #DDF5EE; color: #0B7A66; flex-shrink: 0;
