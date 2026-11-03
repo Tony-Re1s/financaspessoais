@@ -444,14 +444,18 @@ if(!window.__finMais){window.__finMais=1;
 }catch(e){}})();
 (function(){try{
 const P=window.parent; if(!P||P===window) return; const d=P.document;
-const T="Finanças", I=window.location.origin+"/app/static/icone-180.png";
+const T="Finanças", L=window.location, k=L.pathname.indexOf("/~/+/");
+const B=L.origin+(k>=0? L.pathname.slice(0,k)+"/~/+/" : "/");   /* no Streamlit Cloud o app (e o /app/static) mora em /~/+/ */
+const I=B+"app/static/icone-180.png";
 function link(rel){let l=d.head.querySelector('link[rel="'+rel+'"]'); if(!l){l=d.createElement('link'); l.rel=rel; d.head.appendChild(l);} return l;}
 function meta(n,v){let m=d.head.querySelector('meta[name="'+n+'"]'); if(!m){m=d.createElement('meta'); m.name=n; d.head.appendChild(m);} if(m.content!==v) m.content=v;}
 function fix(){
   if(d.title!==T) d.title=T;
   d.head.querySelectorAll('link[rel~="icon"]').forEach(l=>{if(l.href!==I){l.href=I; l.type="image/png";}});
   if(!d.head.querySelector('link[rel~="icon"]')){const l=link("icon"); l.href=I; l.type="image/png";}
-  const a=link("apple-touch-icon"); if(a.href!==I) a.href=I;
+  d.head.querySelectorAll('link[rel="apple-touch-icon"]').forEach(l=>{if(l.href!==I) l.href=I; if(l.getAttribute("sizes")!=="180x180") l.setAttribute("sizes","180x180");});
+  if(!d.head.querySelector('link[rel="apple-touch-icon"]')){const a=link("apple-touch-icon"); a.href=I; a.setAttribute("sizes","180x180");}
+  d.head.querySelectorAll('link[rel="manifest"],link[rel="mask-icon"]').forEach(l=>l.remove());   /* manifesto do Streamlit = coroa */
   meta("apple-mobile-web-app-title",T); meta("application-name",T); meta("theme-color","#111827");
   meta("apple-mobile-web-app-capable","yes");
   if(!d.getElementById("fin-sem-selo")){const s=d.createElement("style"); s.id="fin-sem-selo";
@@ -459,7 +463,9 @@ function fix(){
     d.head.appendChild(s);}
 }
 fix();
-if(!P.__finMarca){P.__finMarca=new P.MutationObserver(()=>fix()); P.__finMarca.observe(d.head,{subtree:true,childList:true,characterData:true,attributes:true});}
+P.__finFix=fix;
+if(P.__finMarca&&!P.__finMarca2){P.__finMarca.disconnect();}
+if(!P.__finMarca2){P.__finMarca2=new P.MutationObserver(()=>P.__finFix()); P.__finMarca2.observe(d.head,{subtree:true,childList:true,characterData:true,attributes:true});}
 }catch(e){}})();</script>"""
 
 
