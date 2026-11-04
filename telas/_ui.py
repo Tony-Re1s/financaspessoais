@@ -444,10 +444,11 @@ if(!window.__finMais){window.__finMais=1;
 }catch(e){}})();
 (function(){try{
 /* depois de uma atualização, o navegador pode ter guardado a versão antiga do app e pedir arquivos que não
-   existem mais ("Importing a module script failed"): baixa de novo, sem cache, e recarrega (até 2x em 10 min) */
+   existem mais (erro de módulo do Safari/Chrome): baixa de novo, sem cache, e recarrega (até 2x em 10 min).
+   As frases do erro são montadas em pedaços para o próprio script (que fica na página) não casar com elas. */
 if(window.__finRecup) return; window.__finRecup=1;
 const W=(window.parent&&window.parent!==window)?window.parent:window, K="fin-recarregou";
-const RE=/Importing a module script failed|dynamically imported module|error loading dynamically/i;
+const J=(a)=>a.join(" "), RE=new RegExp([J(["Importing","a","module","script","failed"]), J(["dynamically","imported","module"]), J(["error","loading","dynamically"])].join("|"),"i");
 async function recuperar(){
   let h=[]; try{h=JSON.parse(W.sessionStorage.getItem(K)||"[]")}catch(e){}
   h=h.filter(t=>Date.now()-t<600000); if(h.length>=2) return;
