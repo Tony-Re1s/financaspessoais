@@ -443,17 +443,23 @@ if(!window.__finMais){window.__finMais=1;
     },60);},true);}
 }catch(e){}})();
 (function(){try{
-/* depois de uma atualização, o app salvo no celular pode pedir arquivos que não existem mais
-   ("Importing a module script failed"): recarrega uma vez sozinho */
+/* depois de uma atualização, o navegador pode ter guardado a versão antiga do app e pedir arquivos que não
+   existem mais ("Importing a module script failed"): baixa de novo, sem cache, e recarrega (até 2x em 10 min) */
 if(window.__finRecup) return; window.__finRecup=1;
 const W=(window.parent&&window.parent!==window)?window.parent:window, K="fin-recarregou";
 const RE=/Importing a module script failed|dynamically imported module|error loading dynamically/i;
+async function recuperar(){
+  let h=[]; try{h=JSON.parse(W.sessionStorage.getItem(K)||"[]")}catch(e){}
+  h=h.filter(t=>Date.now()-t<600000); if(h.length>=2) return;
+  h.push(Date.now()); try{W.sessionStorage.setItem(K,JSON.stringify(h))}catch(e){}
+  const urls=[location.href, W.location.href].concat([...document.querySelectorAll('script[src],link[rel="modulepreload"],link[rel="stylesheet"]')].map(e=>e.src||e.href))
+    .concat(performance.getEntriesByType("resource").map(e=>e.name).filter(n=>/[/]static[/](js|css)[/]/.test(n)));
+  await Promise.all(urls.map(u=>fetch(u,{cache:"reload",credentials:"include"}).catch(()=>0)));
+  W.location.reload();
+}
 setInterval(function(){try{
-  const els=document.querySelectorAll('[data-testid="stException"],[data-testid="stAlert"],[data-testid="stAlertContainer"]');
-  for(const e of els){ if(RE.test(e.textContent||"")){
-    const t=+(W.sessionStorage.getItem(K)||0);
-    if(Date.now()-t>120000){W.sessionStorage.setItem(K,String(Date.now())); W.location.reload();}
-    return; } }
+  const m=document.querySelector('[data-testid="stMain"]')||document.body;
+  if(RE.test(m.textContent||"")) recuperar();
 }catch(e){}},2000);
 }catch(e){}})();
 (function(){try{
