@@ -10,6 +10,13 @@ from telas import _ui
 from telas._comum import cartoes_kpi, e_celular, seletor_escopo, usuario
 
 u = usuario()
+_T0 = __import__("time").perf_counter()
+_TEMPOS = []
+
+
+def _t(rotulo):   # cronômetro de diagnóstico: só aparece com ?tempo=1
+    _TEMPOS.append((rotulo, __import__("time").perf_counter() - _T0))
+
 cel = e_celular()
 _ui.aviso_ok()
 topo_esq, topo_dir = st.columns([3, 1], vertical_alignment="bottom")
@@ -39,11 +46,14 @@ sel = st.segmented_control("Mês", meses, default=st.session_state.get("_painel_
 st.session_state["_painel_mes"] = sel
 
 # --- fluxo de caixa das contas (as minhas): uma leitura para a janela toda ---------------------
+_t("início")
 contas = repo.contas(u)
+_t("contas")
 caixa = contas[contas["tipo"].isin(saldos.TIPOS_CAIXA)]
 ids = list(caixa["id"])
 ini_w, fim_w = _ini(meses[0]), _fim(meses[-1])
 s0, ext = saldos.extrato(u, ids, ini_w, fim_w) if ids else (0.0, pd.DataFrame())
+_t("extrato")
 
 if not ext.empty:
     ext = ext.copy()
@@ -180,6 +190,7 @@ def _td(v, m, cls=""):
     return f"<td class='{'sel' if m == sel else ''} {cls}'>{brl(v) if abs(v) > 0.004 else '—'}</td>"
 
 
+_t("tabela mensal")
 if visao == "contas":
     if caixa.empty:
         st.caption("Cadastre suas contas correntes para ver o saldo de cada uma.")
@@ -261,7 +272,9 @@ try:
                      f"<div class='n' style='font-size:.7rem'>benefício · fora do fluxo</div></div></div>")
 except Exception:  # noqa: BLE001
     pass
+_t("visão contas/cartões")
 fat = cartoes.faturas(u)
+_t("faturas")
 if not fat.empty:
     info = contas.set_index("id")
     for r in fat[fat["mes_ref"] == sel].sort_values("vencimento").itertuples():
@@ -423,3 +436,7 @@ st.markdown("""<style>
   .st-key-painel_mes button {flex-shrink: 0;}
 }
 </style>""", unsafe_allow_html=True)
+
+_t("fim")
+if st.query_params.get("tempo"):
+    st.code("\n".join(f"{r:>22} {t*1000:7.0f} ms" for r, t in _TEMPOS))
