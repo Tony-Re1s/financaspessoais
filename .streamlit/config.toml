@@ -10,6 +10,8 @@ baseRadius = "large"
 
 [server]
 runOnSave = true
+# o Streamlit Cloud devolvia 500 no upload de arquivo (token XSRF mal configurado do lado deles)
+enableXsrfProtection = false
 enableStaticServing = true          # ícone do atalho do celular (static/icone-180.png)
 # sai para o app do banco e volta: a sessão (tela, filtros) fica guardada por até 1 hora
 disconnectedSessionTTL = 3600
