@@ -341,7 +341,8 @@ def plano_futuras(u, conta_id, fat: Fatura, regs: pd.DataFrame, vencimento: date
         ln = fat.linhas[r.i]
         if r.situacao not in ("nova", "ja_lancada") or not ln.parcela_num or ln.parcela_num >= ln.parcela_total:
             continue
-        nomes = [ln.descricao] + ([r.existente_desc] if r.existente_desc else [])
+        # existente_desc vem do DataFrame: nas linhas "nova" é NaN (float), que passa num `if` comum
+        nomes = [ln.descricao] + ([r.existente_desc] if isinstance(r.existente_desc, str) and r.existente_desc else [])
         for k in range(1, ln.parcela_total - ln.parcela_num + 1):
             venc_k = add_meses(vencimento, k)
             ja = db.um("""select 1 from lancamentos
