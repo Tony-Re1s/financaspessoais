@@ -13,7 +13,6 @@ Previstos contam na data deles (é uma projeção); o app avisa os vencidos sem 
 """
 from __future__ import annotations
 
-import json
 from datetime import date, timedelta
 
 import pandas as pd
@@ -61,9 +60,36 @@ def _faturas(u, conta_ids: list) -> pd.DataFrame:
                          "fonte": "fatura"})
 
 
+_VAZIO = ["id", "data", "descricao", "categoria", "valor", "status", "conta", "fonte"]
+
+
+def _contas_caixa_ids(u) -> list:
+    df = db.consultar("select id from contas where dono_id = :u and tipo = any(:t)", u=u["id"], t=list(TIPOS_CAIXA))
+    return list(df["id"]) if not df.empty else []
+
+
 def movimentos(u, conta_ids: list, ini: date | None = None, fim: date | None = None) -> pd.DataFrame:
+    """Movimentos das contas pedidas. Por baixo, busca de uma vez os de TODAS as contas de caixa do usuário
+    (uma consulta, guardada em cache) e filtra em memória — o painel chama isto dezenas de vezes."""
     if not conta_ids:
-        return pd.DataFrame(columns=["id", "data", "descricao", "categoria", "valor", "status", "conta", "fonte"])
+        return pd.DataFrame(columns=_VAZIO)
+    todas = _contas_caixa_ids(u)
+    pedidas = set(conta_ids)
+    if pedidas <= set(todas):
+        df = _movimentos_brutos(u, todas)
+        df = df[df["conta"].isin(pedidas)] if not df.empty else df
+    else:
+        df = _movimentos_brutos(u, list(conta_ids))
+    if df.empty:
+        return df
+    if ini:
+        df = df[df["data"] >= ini]
+    if fim:
+        df = df[df["data"] <= fim]
+    return df.sort_values(["data", "valor"], ascending=[True, False]).reset_index(drop=True)
+
+
+def _movimentos_brutos(u, conta_ids: list) -> pd.DataFrame:
     principal = conta_principal(u)
     df = db.consultar("""
         select l.id, coalesce(l.data_pagamento, l.data_vencimento) as data, l.descricao,
@@ -84,24 +110,51 @@ def movimentos(u, conta_ids: list, ini: date | None = None, fim: date | None = N
            and l.conta_destino_id = any(:c)""", u=u["id"], c=list(conta_ids), p=principal)
     df = pd.concat([df, _faturas(u, conta_ids)], ignore_index=True) if not df.empty else _faturas(u, conta_ids)
     if df.empty:
-        return df
+        return pd.DataFrame(columns=_VAZIO)
     df["data"] = pd.to_datetime(df["data"]).dt.date
     df["valor"] = df["valor"].astype(float)
-    if ini:
-        df = df[df["data"] >= ini]
-    if fim:
-        df = df[df["data"] <= fim]
-    return df.sort_values(["data", "valor"], ascending=[True, False]).reset_index(drop=True)
+    return df
 
 
 # ---------------------------------------------------------------------------
 # saldos
 # ---------------------------------------------------------------------------
-def ancoras(conta_id) -> pd.DataFrame:
+def _todas_ancoras(u) -> pd.DataFrame:
+    """Todos os saldos informados das contas do usuário + saldo inicial de cada conta, numa consulta só.
+    A tabela é pequena (uma linha por saldo informado); antes eram 3-4 idas ao banco por conta por chamada."""
+    t = db.consultar("""
+        select c.id as conta_id, c.saldo_inicial, c.data_saldo_inicial, s.data, s.valor
+          from contas c left join saldos s on s.conta_id = c.id
+         where c.dono_id = :u order by c.id, s.data""", u=u["id"])
+    if t.empty:
+        return t
+    t = t.copy()
+    t["data"] = [None if pd.isna(x) else pd.Timestamp(x).date() for x in t["data"]]
+    t["data_saldo_inicial"] = [None if pd.isna(x) else pd.Timestamp(x).date() for x in t["data_saldo_inicial"]]
+    return t
+
+
+def ancoras(conta_id, u=None) -> pd.DataFrame:
+    if u is not None:
+        t = _todas_ancoras(u)
+        t = t[(t["conta_id"] == conta_id) & t["data"].notna()][["data", "valor"]]
+        return t.reset_index(drop=True)
     return db.consultar("select data, valor from saldos where conta_id = :c order by data", c=conta_id)
 
 
-def _ancora_ate(conta_id, d: date) -> tuple[date, float]:
+def _ancora_ate(conta_id, d: date, u=None) -> tuple[date, float]:
+    if u is not None:
+        t = _todas_ancoras(u)
+        t = t[t["conta_id"] == conta_id]
+        if t.empty:
+            return date(1900, 1, 1) - timedelta(days=1), 0.0
+        ate = t[[x is not None and x <= d for x in t["data"]]]
+        if not ate.empty:
+            r = ate.iloc[-1]
+            return r["data"], float(r["valor"])
+        c = t.iloc[0]
+        d0 = c["data_saldo_inicial"] or date(1900, 1, 1)
+        return d0 - timedelta(days=1), float(c["saldo_inicial"] or 0)
     r = db.um("select data, valor from saldos where conta_id = :c and data <= :d order by data desc limit 1",
               c=conta_id, d=d)
     if r:
@@ -111,15 +164,17 @@ def _ancora_ate(conta_id, d: date) -> tuple[date, float]:
 
 
 def saldo_em(u, conta_id, d: date) -> float:
-    r = db.um("select 1 from saldos where conta_id = :c and data <= :d limit 1", c=conta_id, d=d)
-    if r is None:
+    anc = ancoras(conta_id, u)
+    datas = [pd.Timestamp(x).date() for x in anc["data"]] if not anc.empty else []
+    if not any(x <= d for x in datas):
         # nenhum saldo informado até d, mas há um depois: volta a conta a partir dele
-        depois = db.um("select data, valor from saldos where conta_id = :c and data > :d order by data limit 1",
-                       c=conta_id, d=d)
+        depois = [(x, v) for x, v in zip(datas, anc["valor"]) if x > d]
         if depois:
-            mov = movimentos(u, [conta_id], d + timedelta(days=1), depois["data"])
-            return float(depois["valor"]) - (float(mov["valor"].sum()) if not mov.empty else 0.0)
-    a_data, a_valor = _ancora_ate(conta_id, d)
+            dd, vv = depois[0]
+            r = {"data": dd, "valor": vv}
+            mov = movimentos(u, [conta_id], d + timedelta(days=1), dd)
+            return float(r["valor"]) - (float(mov["valor"].sum()) if not mov.empty else 0.0)
+    a_data, a_valor = _ancora_ate(conta_id, d, u)
     mov = movimentos(u, [conta_id], a_data + timedelta(days=1), d)
     return a_valor + (float(mov["valor"].sum()) if not mov.empty else 0.0)
 
@@ -146,7 +201,7 @@ def extrato(u, conta_ids: list, ini: date, fim: date) -> tuple[float, pd.DataFra
         s0 = saldo_em(u, c, ini - timedelta(days=1))
         inicial += s0
         mov = movimentos(u, [c], ini, fim)
-        anc = ancoras(c)
+        anc = ancoras(c, u)
         anc = anc[(pd.to_datetime(anc["data"]).dt.date >= ini) & (pd.to_datetime(anc["data"]).dt.date <= fim)] \
             if not anc.empty else anc
         if not anc.empty:
