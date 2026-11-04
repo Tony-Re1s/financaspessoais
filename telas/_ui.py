@@ -417,8 +417,8 @@ html, body, [class*="css"], .stApp, button, input, textarea, select {font-family
 """
 
 # Aba do navegador e atalho do celular (nome e ícone do app, em vez de "· Streamlit"), teclado certo no celular e o
-# "Mais" da barra de baixo abrindo/fechando o menu lateral. Atenção: dentro do <script> nada de "<" seguido de letra
-# (o filtro de HTML do Streamlit corta o script).
+# "Mais" da barra de baixo abrindo/fechando o menu lateral. Atenção: dentro do <script> NENHUM "<" (nem "a<5"):
+# o filtro de HTML do Streamlit descarta o script inteiro, sem erro. Use ">" invertendo a comparação.
 _MARCA_ABA = """<script>(function(){try{
 if(!window.__finTeclado){window.__finTeclado=1;
   const ajusta=()=>{
@@ -449,14 +449,13 @@ if(!window.__finMais){window.__finMais=1;
 if(window.__finRecup) return; window.__finRecup=1;
 const W=(window.parent&&window.parent!==window)?window.parent:window, K="fin-recarregou";
 const J=(a)=>a.join(" "), RE=new RegExp([J(["Importing","a","module","script","failed"]), J(["dynamically","imported","module"]), J(["error","loading","dynamically"])].join("|"),"i");
-async function recuperar(){
+function recuperar(){
   let h=[]; try{h=JSON.parse(W.sessionStorage.getItem(K)||"[]")}catch(e){}
-  h=h.filter(t=>Date.now()-t<600000); if(h.length>=2) return;
+  h=h.filter(t=>600000>Date.now()-t); if(h.length>=2) return;
   h.push(Date.now()); try{W.sessionStorage.setItem(K,JSON.stringify(h))}catch(e){}
   const urls=[location.href, W.location.href].concat([...document.querySelectorAll('script[src],link[rel="modulepreload"],link[rel="stylesheet"]')].map(e=>e.src||e.href))
     .concat(performance.getEntriesByType("resource").map(e=>e.name).filter(n=>/[/]static[/](js|css)[/]/.test(n)));
-  await Promise.all(urls.map(u=>fetch(u,{cache:"reload",credentials:"include"}).catch(()=>0)));
-  W.location.reload();
+  Promise.all(urls.map(u=>fetch(u,{cache:"reload"}).catch(()=>0))).then(()=>W.location.reload());
 }
 setInterval(function(){try{
   const m=document.querySelector('[data-testid="stMain"]')||document.body;
@@ -492,6 +491,9 @@ if(!P.__finMarca2){P.__finMarca2=new P.MutationObserver(()=>P.__finFix()); P.__f
 
 def css():
     st.markdown(CSS, unsafe_allow_html=True)
+
+
+assert _MARCA_ABA[8:-9].count("<") == 0, "script da marca com '<': o Streamlit descarta o script"
 
 
 def marca():
