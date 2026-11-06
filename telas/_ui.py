@@ -41,7 +41,15 @@ NUM = "①②③④⑤"
 
 
 def rascunho(ch: str, inicial: dict) -> dict:
-    return st.session_state.setdefault(f"{ch}__r", dict(inicial))
+    """Rascunho do cadastro em etapas. Antes de devolver, puxa o que ficou na chave de cada widget:
+    quem digita e clica em Próximo no mesmo ciclo deixa o valor na chave do widget, não no rascunho."""
+    r = st.session_state.setdefault(f"{ch}__r", dict(inicial))
+    for nome in list(r):
+        k = f"{ch}__{nome}"
+        if k in st.session_state:
+            v = st.session_state[k]
+            r[nome] = None if v == "__nada__" else v
+    return r
 
 
 def rascunho_limpar(ch: str):
