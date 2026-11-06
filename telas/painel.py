@@ -197,7 +197,7 @@ for r in res_v.itertuples():
         v = float(linha_m[b_])
         if abs(v) < 0.004:
             continue
-        blocos += f"<div class='r blk'><span>{b_}</span><span>− {brl(v)}</span></div>"
+        blocos += f"<div class='r blk'><span>{b_.replace('Faturas de cartão', 'Faturas').replace('Outras saídas', 'Outras')}</span><span>− {brl(v)}</span></div>"
         if abrir:
             blocos += _rows(m, b_, "sub")
     ent_rows = _rows(m, "Entradas", "sub") if abrir else ""
