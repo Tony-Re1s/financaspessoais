@@ -179,12 +179,21 @@ def _spark(m):
             f"<circle cx='{i / n * 100:.1f}' cy='{cy:.1f}' r='3' class='{'neg' if v < 0 else ''}'/></svg>")
 
 
+# com as categorias abertas, todos os meses mostram as MESMAS linhas em cada bloco (união das categorias,
+# ordenadas pelo total da janela), com "—" onde não há valor — assim Aluguel fica na mesma altura em toda coluna
+det_v = det[det["mes"].isin(vis)]
+_ordem = {b: list(det_v[det_v["bloco"] == b].groupby("categoria")["valor"].sum().sort_values(ascending=False).index)
+          for b in ["Entradas"] + cascata.BLOCOS}
+
+
 def _rows(m, bloco, cls):
-    d = det[(det["mes"] == m) & (det["bloco"] == bloco)]
-    if d.empty:
-        return ""
-    return "".join(f"<div class='r sub'><span>{_ui.esc(str(r.categoria))}</span><span>{brl(r.valor)}</span></div>"
-                   for r in d.itertuples())
+    d = det_v[(det_v["mes"] == m) & (det_v["bloco"] == bloco)].set_index("categoria")["valor"]
+    out = []
+    for cat in _ordem.get(bloco, []):
+        v = float(d.get(cat, 0.0))
+        out.append(f"<div class='r sub{' vazio' if v < 0.004 else ''}'><span>{_ui.esc(str(cat))}</span>"
+                   f"<span>{brl(v) if v >= 0.004 else '—'}</span></div>")
+    return "".join(out)
 
 
 cols_html = []
@@ -195,9 +204,10 @@ for r in res_v.itertuples():
     linha_m = res_v.loc[res_v["mes"] == m].iloc[0]
     for b_ in cascata.BLOCOS:
         v = float(linha_m[b_])
-        if abs(v) < 0.004:
+        if abs(v) < 0.004 and not (abrir and _ordem.get(b_)):
             continue
-        blocos += f"<div class='r blk'><span>{b_.replace('Faturas de cartão', 'Faturas').replace('Outras saídas', 'Outras')}</span><span>− {brl(v)}</span></div>"
+        blocos += (f"<div class='r blk'><span>{b_.replace('Faturas de cartão', 'Faturas').replace('Outras saídas', 'Outras')}</span>"
+                   f"<span>{'− ' + brl(v) if abs(v) >= 0.004 else '—'}</span></div>")
         if abrir:
             blocos += _rows(m, b_, "sub")
     ent_rows = _rows(m, "Entradas", "sub") if abrir else ""

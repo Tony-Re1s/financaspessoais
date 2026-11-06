@@ -383,7 +383,7 @@ html, body, [class*="css"], .stApp, button, input, textarea, select {font-family
 .ui-casc .r.in span:last-child {color: #0B7A66;}
 .ui-casc .r.blk {background: #EEF1F5; font-weight: 900; font-size: .68rem; letter-spacing: .05em; text-transform: uppercase; border-bottom: 0;}
 .ui-casc .r.blk span {color: #5B6472;}
-.ui-casc .r.sub {padding-left: 24px; font-size: .8rem;} .ui-casc .r.sub span:first-child::before {content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #CBD5E1; margin-right: 7px; vertical-align: 2px;}
+.ui-casc .r.sub {padding-left: 24px; font-size: .8rem;} .ui-casc .r.sub.vazio span {color: #B6BDC8;} .ui-casc .r.sub span:first-child::before {content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #CBD5E1; margin-right: 7px; vertical-align: 2px;}
 .ui-casc .r.tot {font-weight: 900; border-top: 2px solid #E5E7EB; border-bottom: 0; margin-top: auto;}
 .ui-casc .r.tot .pos {color: #0B7A66;} .ui-casc .neg {color: #C81E1E;}
 .ui-casc .r.saldo {background: #DDF5EE; font-weight: 900; border-bottom: 0;} .ui-casc .r.saldo span {color: #111827;}
