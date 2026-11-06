@@ -365,6 +365,30 @@ html, body, [class*="css"], .stApp, button, input, textarea, select {font-family
 .chip.ok {background: #DDF5EE; color: #0B7A66;} .chip.warn {background: #FDEBD3; color: #A2490A;}
 .chip.bad {background: #FDE2E2; color: #C81E1E;} .chip.mute {background: #E5E7EB; color: #5B6472;}
 .ui-lrow .v.neg {color: #C81E1E;} .ui-lrow .sel {flex-shrink: 0; display: flex;}
+.ui-casc {display: grid; grid-auto-flow: column; grid-auto-columns: minmax(200px, 1fr); overflow-x: auto; background: #fff; border-radius: 20px; box-shadow: 0 2px 10px rgba(15,23,42,.06); scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;}
+.ui-casc .mes {border-right: 1px solid #E5E7EB; display: flex; flex-direction: column; scroll-snap-align: start; min-width: 0;}
+.ui-casc .mes:last-child {border-right: 0;}
+.ui-casc .mes.hoje .h {background: #DDF5EE;} .ui-casc .mes.hoje .h span {color: #0B7A66;}
+.ui-casc .h {display: flex; justify-content: space-between; align-items: center; padding: 11px 14px; border-bottom: 1px solid #E5E7EB; font-size: .74rem; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; color: #5B6472;}
+.ui-casc .h b {font-size: .95rem; letter-spacing: 0; text-transform: none; color: #111827; font-variant-numeric: tabular-nums;}
+.ui-casc .h b.neg {color: #C81E1E;}
+.ui-casc .sp {height: 46px; margin: 8px 12px 2px;} .ui-casc .sp svg {width: 100%; height: 100%; overflow: visible;}
+.ui-casc .sp polyline {fill: none; stroke: #CBD5E1; stroke-width: 1.5; vector-effect: non-scaling-stroke;}
+.ui-casc .sp circle {fill: #0B7A66; vector-effect: non-scaling-stroke;} .ui-casc .sp circle.neg {fill: #C81E1E;}
+.ui-casc .sp line.z {stroke: #FCA5A5; stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke;}
+.ui-casc .r {display: flex; justify-content: space-between; gap: 8px; padding: 7px 14px; font-weight: 700; font-size: .86rem; border-bottom: 1px dashed #E5E7EB; font-variant-numeric: tabular-nums;}
+.ui-casc .r span:first-child {color: #5B6472; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;}
+.ui-casc .r.tot span:first-child, .ui-casc .r.saldo span:first-child, .ui-casc .r.sim span:first-child {overflow: visible;}
+.ui-casc .r span:last-child {white-space: nowrap;}
+.ui-casc .r.in span:last-child {color: #0B7A66;}
+.ui-casc .r.blk {background: #EEF1F5; font-weight: 900; font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; border-bottom: 0;}
+.ui-casc .r.blk span {color: #5B6472;}
+.ui-casc .r.sub {padding-left: 24px; font-size: .8rem;} .ui-casc .r.sub span:first-child::before {content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #CBD5E1; margin-right: 7px; vertical-align: 2px;}
+.ui-casc .r.tot {font-weight: 900; border-top: 2px solid #E5E7EB; border-bottom: 0; margin-top: auto;}
+.ui-casc .r.tot .pos {color: #0B7A66;} .ui-casc .neg {color: #C81E1E;}
+.ui-casc .r.saldo {background: #DDF5EE; font-weight: 900; border-bottom: 0;} .ui-casc .r.saldo span {color: #111827;}
+.ui-casc .r.sim {background: #FDEBD3; font-weight: 900; border-bottom: 0;} .ui-casc .r.sim span {color: #A2490A;}
+@media (max-width: 640px) {.ui-casc {grid-auto-columns: 86vw;} .ui-casc .r {font-size: .9rem;}}
 .ui-etapas {display: flex; gap: 6px; margin: 0 0 14px; flex-wrap: wrap;}
 .ui-etapas span {font-size: .78rem; font-weight: 800; padding: 6px 12px; border-radius: 99px; background: #E5E7EB; color: #5B6472;}
 .ui-etapas span.on {background: #111827; color: #fff;} .ui-etapas span.feito {background: #DDF5EE; color: #0B7A66;}

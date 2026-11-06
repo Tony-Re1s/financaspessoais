@@ -4,7 +4,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from core import cartoes, repo, saldos
+from core import cartoes, cascata, repo, saldos
 from core.fmt import brl, dia_no_mes, hoje, mes_label, mes_ref, somar_meses
 from telas import _ui
 from telas._comum import cartoes_kpi, e_celular, seletor_escopo, usuario
@@ -130,42 +130,94 @@ with st.container(border=True):
             st.caption(f"Faixa amarela = {mes_label(sel)} · linha tracejada = previsão · menor saldo nos próximos "
                        f"90 dias: **{brl(m['saldo'])}** em {m['data']:%d/%m}")
 
-# --- fluxo de caixa mês a mês --------------------------------------------------------------------
+# --- fluxo de caixa em cascata: um mês por coluna ---------------------------------------------------
 st.markdown("<div class='ui-sec'>Fluxo de caixa mês a mês</div>", unsafe_allow_html=True)
-with st.container(border=True):
-    barras = fluxo.melt(id_vars=["rotulo", "mes"], value_vars=["entradas", "saidas"], var_name="tipo",
-                        value_name="valor")
-    barras["tipo"] = barras["tipo"].map({"entradas": "Entradas", "saidas": "Saídas"})
-    ordem = list(fluxo["rotulo"])
-    b = alt.Chart(barras).mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4, opacity=.9).encode(
-        x=alt.X("rotulo:N", sort=ordem, title=None, axis=alt.Axis(labelAngle=0 if not cel else -45)),
-        xOffset=alt.XOffset("tipo:N", sort=["Entradas", "Saídas"]),
-        y=alt.Y("valor:Q", title=None, axis=alt.Axis(format=",.0f", gridOpacity=.2)),
-        color=alt.Color("tipo:N", scale=alt.Scale(domain=["Entradas", "Saídas", "Saldo final"],
-                                                  range=["#16A34A", "#E5484D", "#64748B"]),
-                        legend=alt.Legend(title=None, orient="top")),
-        tooltip=[alt.Tooltip("rotulo:N", title="Mês"), alt.Tooltip("tipo:N", title=""),
-                 alt.Tooltip("valor:Q", title="R$", format=",.2f")])
-    sf = fluxo.assign(tipo="Saldo final")
-    ln = alt.Chart(sf).mark_line(point=True, strokeWidth=2.4).encode(
-        x=alt.X("rotulo:N", sort=ordem), y="final:Q", color=alt.Color("tipo:N"),
-        tooltip=[alt.Tooltip("rotulo:N", title="Mês"), alt.Tooltip("final:Q", title="Saldo final", format=",.2f")])
-    st.altair_chart((b + ln).properties(height=250 if cel else 270), use_container_width=True)
+casc = cascata.montar(ext, meses, s0)
+res = casc["resumo"]
+with st.container(key="casc_barra"):
+    cb1, cb2, cb3 = st.columns([2.2, 1.2, 1], vertical_alignment="center")
+    abrir = cb1.toggle("Abrir as categorias", key="casc_abrir", value=False)
+    janela = cb2.segmented_control("Meses", ["6", "12"], default="6" if cel else "12", key="casc_jan",
+                                   label_visibility="collapsed")
+    if not res.empty:
+        cb3.download_button("Exportar Excel", cascata.excel(res, casc["linhas"], ext),
+                            file_name=f"fluxo-de-caixa-{hj:%Y-%m-%d}.xlsx", icon=":material/download:",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True, key="casc_xlsx")
 
-    # tabela: meses nas colunas, mês escolhido em destaque
-    cab = "".join(f"<th class='{'sel' if r.mes == sel else ''}{' fut' if r.mes > atual else ''}'>{r.rotulo}</th>"
-                  for r in fluxo.itertuples())
+# simulação: gasto extra por mês e/ou retirada única
+with st.expander("E se…? (simular)", icon=":material/tune:"):
+    s1, s2, s3 = st.columns(3)
+    extra = s1.number_input("Gasto a mais por mês (R$)", 0.0, step=100.0, key="sim_extra",
+                            help="Ex.: 2.000 de cartão novo todo mês, que ainda não está lançado.")
+    retirada = s2.number_input("Retirada única (R$)", 0.0, step=500.0, key="sim_ret",
+                               help="Ex.: entrada de um intercâmbio, compra grande.")
+    mes_ret = s3.selectbox("No mês", [m for m in meses if m >= atual], format_func=mes_label, key="sim_mes")
+sim = cascata.simular(res, extra, retirada, mes_ret, a_partir=atual) if (extra or retirada) else None
 
-    def _linha(nome, campo, cls=""):
-        tds = "".join(f"<td class='{'sel' if r.mes == sel else ''} {cls}'>{brl(getattr(r, campo))}</td>"
-                      for r in fluxo.itertuples())
-        return f"<tr><th>{nome}</th>{tds}</tr>"
+# mostra só a janela escolhida, a partir do mês atual (passado fica no Excel)
+vis = [m for m in meses if m >= atual][: int(janela or 12)]
+res_v = res[res["mes"].isin(vis)]
+det = casc["linhas"]
+serie = (sim if sim is not None else res)[["mes", "saldo_fim"] + (["saldo_sim"] if sim is not None else [])]
+y_col = "saldo_sim" if sim is not None else "saldo_fim"
+y_min, y_max = float(min(0, serie[y_col].min())), float(max(serie[y_col].max(), 1))
 
-    tem_aj = (fluxo["ajustes"].abs() > 0.004).any()
-    _ui.render(f"""<div class="ui-fluxo"><table><thead><tr><th></th>{cab}</tr></thead><tbody>
-        {_linha('Saldo inicial', 'inicial')}{_linha('↑ Entradas', 'entradas', 'pos')}{_linha('↓ Saídas', 'saidas', 'neg')}
-        {_linha('Ajustes', 'ajustes') if tem_aj else ''}{_linha('Saldo final', 'final', 'fim')}
-        </tbody></table></div>""")
+
+def _spark(m):
+    """Linha do saldo acumulado da janela, com o ponto deste mês."""
+    pts = []
+    n = max(len(vis) - 1, 1)
+    for i, mm in enumerate(vis):
+        v = float(serie.loc[serie["mes"] == mm, y_col].iloc[0])
+        pts.append(f"{i / n * 100:.1f},{46 - (v - y_min) / (y_max - y_min) * 40:.1f}")
+    i = vis.index(m)
+    v = float(serie.loc[serie["mes"] == m, y_col].iloc[0])
+    cy = 46 - (v - y_min) / (y_max - y_min) * 40
+    zero = "" if y_min >= 0 else f"<line x1='0' x2='100' y1='{46 - (0 - y_min) / (y_max - y_min) * 40:.1f}' y2='{46 - (0 - y_min) / (y_max - y_min) * 40:.1f}' class='z'/>"
+    return (f"<svg viewBox='0 0 100 48' preserveAspectRatio='none'>{zero}<polyline points='{' '.join(pts)}'/>"
+            f"<circle cx='{i / n * 100:.1f}' cy='{cy:.1f}' r='3' class='{'neg' if v < 0 else ''}'/></svg>")
+
+
+def _rows(m, bloco, cls):
+    d = det[(det["mes"] == m) & (det["bloco"] == bloco)]
+    if d.empty:
+        return ""
+    return "".join(f"<div class='r sub'><span>{_ui.esc(str(r.categoria))}</span><span>{brl(r.valor)}</span></div>"
+                   for r in d.itertuples())
+
+
+cols_html = []
+for r in res_v.itertuples():
+    m = r.mes
+    sv = float(serie.loc[serie["mes"] == m, y_col].iloc[0])
+    blocos = ""
+    linha_m = res_v.loc[res_v["mes"] == m].iloc[0]
+    for b_ in cascata.BLOCOS:
+        v = float(linha_m[b_])
+        if abs(v) < 0.004:
+            continue
+        blocos += f"<div class='r blk'><span>{b_}</span><span>− {brl(v)}</span></div>"
+        if abrir:
+            blocos += _rows(m, b_, "sub")
+    ent_rows = _rows(m, "Entradas", "sub") if abrir else ""
+    sobra_cls = "neg" if r.sobra < 0 else "pos"
+    sim_html = (f"<div class='r sim'><span>Simulado</span><span class='{'neg' if sv < 0 else ''}'>{brl(sv)}</span></div>"
+                if sim is not None else "")
+    cols_html.append(f"""<div class="mes {'hoje' if m == atual else ''}">
+        <div class="h"><span>{r.rotulo}</span><b class="{'neg' if r.saldo_fim < 0 else ''}">{brl(r.saldo_fim)}</b></div>
+        <div class="sp">{_spark(m)}</div>
+        <div class="r in"><span>Entradas</span><span>+ {brl(r.entradas)}</span></div>{ent_rows}
+        {blocos}
+        <div class="r tot"><span>Sobra do mês</span><span class="{sobra_cls}">{'−' if r.sobra < 0 else '+'} {brl(abs(r.sobra))}</span></div>
+        <div class="r saldo"><span>Saldo no fim do mês</span><span class="{'neg' if r.saldo_fim < 0 else ''}">{brl(r.saldo_fim)}</span></div>
+        {sim_html}</div>""")
+_ui.render(f"<div class='ui-casc'>{''.join(cols_html)}</div>")
+if sim is not None:
+    pior = sim[sim["mes"].isin(vis)].loc[lambda d: d["saldo_sim"].idxmin()]
+    st.caption("Simulação: " + (f"{brl(extra)}/mês a mais " if extra else "") + ("e " if extra and retirada else "")
+               + (f"retirada de {brl(retirada)} em {mes_label(mes_ret)} " if retirada else "")
+               + f"→ menor saldo **{brl(pior['saldo_sim'])}** em {pior['rotulo']}.")
 
 # --- por conta e por cartão, mês a mês ---------------------------------------------------------------
 st.markdown("<div class='ui-sec'>Contas e cartões mês a mês</div>", unsafe_allow_html=True)
