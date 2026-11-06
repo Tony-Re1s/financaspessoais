@@ -161,10 +161,24 @@ _ui.hero(c["nome"], f"Fatura de {mes_label(mes)}", brl(linha["total"]),
 
 a1, a2, a3, a4 = st.columns([1.4, 1, 1, 1.6], vertical_alignment="center")
 if not linha["paga"]:
-    if a1.button("Marcar fatura como paga", icon=":material/check:", type="primary", use_container_width=True):
-        cartoes.marcar_fatura(u, sel, mes, True)
-        st.session_state["_ui_ok"] = f"Fatura de {mes_label(mes)} do {c['nome']} marcada como paga."
-        st.rerun()
+    with a1.popover("Pagar fatura", icon=":material/check:", use_container_width=True):
+        total_fat = float(linha["total"])
+        v_pago = st.number_input("Valor pago (R$)", 0.0, value=round(total_fat, 2), step=50.0, format="%.2f",
+                                 key=f"pg_v_{sel}_{mes}",
+                                 help="Pagou menos que o total? O restante vai para a próxima fatura como "
+                                      "\"Saldo anterior\" — depois ajuste o valor com os juros que o banco cobrar.")
+        d_pago = st.date_input("Pago em", value=min(hoje(), venc_d), format="DD/MM/YYYY", key=f"pg_d_{sel}_{mes}")
+        resto_prev = round(total_fat - v_pago, 2)
+        if resto_prev > 0.004:
+            st.caption(f"Vai para a fatura de **{mes_label(somar_meses(mes, 1))}**: {brl(resto_prev)}")
+        elif resto_prev < -0.004:
+            st.caption(f"Pagou {brl(-resto_prev)} a mais que a fatura — fica como crédito? Por enquanto só marca paga.")
+        if st.button("Confirmar pagamento", type="primary", use_container_width=True, key=f"pg_ok_{sel}_{mes}"):
+            resto = cartoes.pagar_fatura(u, sel, mes, min(v_pago, total_fat), d_pago)
+            st.session_state["_ui_ok"] = (f"Fatura de {mes_label(mes)} do {c['nome']} paga." if not resto else
+                                          f"Fatura de {mes_label(mes)} do {c['nome']}: pago {brl(v_pago)}, "
+                                          f"{brl(resto)} foi para a fatura de {mes_label(somar_meses(mes, 1))}.")
+            st.rerun()
 else:
     if a1.button("Reabrir fatura", icon=":material/undo:", use_container_width=True):
         cartoes.marcar_fatura(u, sel, mes, False)

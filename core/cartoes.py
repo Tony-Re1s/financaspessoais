@@ -4,7 +4,7 @@ from __future__ import annotations
 import pandas as pd
 
 from core import db
-from core.fmt import dia_no_mes, hoje, mes_ref, somar_meses
+from core.fmt import brl, dia_no_mes, hoje, mes_label, mes_ref, somar_meses
 
 
 def faturas(u) -> pd.DataFrame:
@@ -96,3 +96,42 @@ def marcar_fatura(u, cartao_id, mes: int, paga: bool, data_pag=None):
                           atualizado_em = now()
                     where dono_id = :u and conta_id = :c and mes_ref = :m and status <> 'cancelado'""",
                 s="pago" if paga else "previsto", d=data_pag, u=u["id"], c=cartao_id, m=mes)
+
+
+def total_fatura(u, cartao_id, mes: int) -> float:
+    r = db.um("""select coalesce(sum(case when tipo = 'receita' then -valor else valor end), 0) as v
+                   from lancamentos where dono_id = :u and conta_id = :c and mes_ref = :m and status <> 'cancelado'""",
+              u=u["id"], c=cartao_id, m=mes)
+    return float(r["v"]) if r else 0.0
+
+
+def pagar_fatura(u, cartao_id, mes: int, valor_pago: float, data_pag=None) -> float:
+    """Paga a fatura inteira ou parte dela.
+
+    Marca TODOS os lançamentos da fatura como pagos (o cartão já cobrou tudo) e, se o valor pago
+    for menor que o total, cria na fatura seguinte um lançamento "Saldo anterior" com a diferença,
+    previsto, na categoria Juros e Multas — ali você ajusta o valor quando o banco mostrar os juros.
+    Devolve o valor que foi para a próxima fatura (0 se pagou tudo)."""
+    from core.semente import garantir_categoria
+    from sqlalchemy import text
+    total = total_fatura(u, cartao_id, mes)
+    resto = round(total - float(valor_pago), 2)
+    marcar_fatura(u, cartao_id, mes, True, data_pag)
+    if resto <= 0.004:
+        return 0.0
+    prox = somar_meses(mes, 1)
+    card = db.um("select dia_vencimento from contas where id = :c", c=cartao_id)
+    y, m = divmod(prox, 100)
+    venc = dia_no_mes(y, m, int(card["dia_vencimento"] or 10))
+    with db.transacao() as s:
+        pai = garantir_categoria(s, u["id"], "Servicos Financeiros")
+        cat = garantir_categoria(s, u["id"], "Juros e Multas", pai)
+        s.execute(text("""
+            insert into lancamentos (dono_id, conta_id, categoria_id, tipo, descricao, valor, data_compra,
+                                     data_vencimento, status, visibilidade, observacao, origem)
+            values (:u, :c, :cat, 'despesa', :d, :v, :dc, :dv, 'previsto', 'privado', :obs, 'manual')"""),
+            dict(u=u["id"], c=cartao_id, cat=cat, d=f"Saldo anterior · fatura de {mes_label(mes)}", v=resto,
+                 dc=data_pag or venc, dv=venc,
+                 obs=f"Pagamento parcial: fatura {brl(total)}, pago {brl(float(valor_pago))}. "
+                     "Ajuste o valor quando o banco mostrar os juros do rotativo."))
+    return resto
