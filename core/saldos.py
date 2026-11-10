@@ -46,14 +46,17 @@ def _faturas(u, conta_ids: list) -> pd.DataFrame:
         select card.id as cartao_id, card.nome as cartao, card.dia_vencimento, card.conta_pagamento_id as conta,
                l.mes_ref, max(l.data_vencimento) as venc,
                sum(case when l.tipo = 'receita' then -l.valor else l.valor end) as total,
-               bool_and(l.status = 'pago') as paga
+               bool_and(l.status = 'pago') as paga,
+               max(l.data_pagamento) filter (where l.status = 'pago') as pag
           from lancamentos l join contas card on card.id = l.conta_id and card.tipo = 'cartao_credito'
          where l.dono_id = :u and l.status <> 'cancelado' and card.conta_pagamento_id = any(:c)
          group by 1, 2, 3, 4, 5""", u=u["id"], c=list(conta_ids))
     if df.empty:
         return pd.DataFrame(columns=["id", "data", "descricao", "categoria", "valor", "status", "conta", "fonte"])
-    df["data"] = df.apply(lambda r: dia_no_mes(r.mes_ref // 100, r.mes_ref % 100, int(r.dia_vencimento))
-                          if pd.notna(r.dia_vencimento) else r.venc, axis=1)
+    # fatura paga: sai da conta no dia em que foi paga; prevista: no vencimento
+    df["data"] = df.apply(lambda r: pd.Timestamp(r.pag).date() if r.paga and pd.notna(r.pag) else
+                          (dia_no_mes(r.mes_ref // 100, r.mes_ref % 100, int(r.dia_vencimento))
+                           if pd.notna(r.dia_vencimento) else r.venc), axis=1)
     return pd.DataFrame({"id": None, "data": df["data"], "descricao": "Fatura " + df["cartao"],
                          "categoria": "Cartão de crédito", "grupo": "Cartão de crédito", "nao_contar": False,
                          "valor": -df["total"].astype(float),
