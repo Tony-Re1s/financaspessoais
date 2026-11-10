@@ -682,6 +682,9 @@ def form_lancamento(u, lanc_id, faturas: list[tuple[str, date]] | None = None):
     conta = st.selectbox("Conta / cartão", ids_c, format_func=lambda k: "— sem conta" if k is None else op_c[k],
                          index=ids_c.index(l["conta_id"]) if l["conta_id"] in ids_c else 0)
     pago = st.toggle("Já foi pago", value=l["status"] == "pago")
+    nao_contar = st.toggle("Não contar (só passa pela conta)", value=bool(l.get("nao_contar")),
+                           help="Mexe no saldo da conta, mas fica fora do Início, do Fluxo de caixa, do orçamento "
+                                "e do IR. Ex.: dinheiro de outra pessoa que só passa por você.")
     if faturas and conta == l["conta_id"]:            # cartão: escolhe em qual fatura a compra cai
         rots = [r for r, _ in faturas]
         atual = next((i for i, (_, d) in enumerate(faturas) if d == l["data_vencimento"]), 0)
@@ -696,7 +699,8 @@ def form_lancamento(u, lanc_id, faturas: list[tuple[str, date]] | None = None):
     if b1.button("Salvar", type="primary", use_container_width=True):
         repo.atualizar_lancamento(u, lanc_id, dict(descricao=desc.strip() or l["descricao"], valor=valor,
                                                    categoria_id=cat, conta_id=conta, data_compra=data,
-                                                   data_vencimento=venc, status="pago" if pago else "previsto"),
+                                                   data_vencimento=venc, status="pago" if pago else "previsto",
+                                                   nao_contar=nao_contar),
                                   futuras)
         st.session_state["_ui_ok"] = "Lançamento atualizado."
         st.rerun()

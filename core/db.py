@@ -144,6 +144,21 @@ _MIGRACOES = [
     ("select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid "
      "where t.typname = 'tipo_conta' and e.enumlabel = 'beneficio'",
      "alter type tipo_conta add value if not exists 'beneficio'"),
+    # 013 — "não contar": passa pela conta (saldo) mas fica fora do Início, Fluxo de caixa, orçamento e IR
+    #       (ex.: depósito da mãe para pagar a parte dela da fatura)
+    ("select 1 from information_schema.columns where table_name = 'lancamentos' and column_name = 'nao_contar'",
+     "alter table lancamentos add column if not exists nao_contar boolean not null default false"),
+    # a view v_lancamentos é 'select l.*' — colunas ficam congeladas na criação; recria para expor nao_contar
+    ("select 1 from information_schema.columns where table_name = 'v_lancamentos' and column_name = 'nao_contar'",
+     """drop view if exists v_lancamentos;
+        create view v_lancamentos as
+        select l.*, coalesce(l.visibilidade, c.visibilidade, cp.visibilidade, k.visibilidade,
+                             'privado'::visibilidade) as visibilidade_efetiva,
+               coalesce(cp.nome, c.nome) as categoria, case when cp.id is not null then c.nome end as subcategoria,
+               k.nome as conta, u.nome as dono_nome, u.email as dono_email
+          from lancamentos l left join categorias c on c.id = l.categoria_id
+          left join categorias cp on cp.id = c.pai_id left join contas k on k.id = l.conta_id
+          join usuarios u on u.id = l.dono_id"""),
     # 010 — cor escolhida pelo usuário para o cartão/conta (hex); vazio = cor do banco
     ("select 1 from information_schema.columns where table_name = 'contas' and column_name = 'cor'",
      "alter table contas add column if not exists cor text"),

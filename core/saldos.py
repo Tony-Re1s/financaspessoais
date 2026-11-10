@@ -55,13 +55,13 @@ def _faturas(u, conta_ids: list) -> pd.DataFrame:
     df["data"] = df.apply(lambda r: dia_no_mes(r.mes_ref // 100, r.mes_ref % 100, int(r.dia_vencimento))
                           if pd.notna(r.dia_vencimento) else r.venc, axis=1)
     return pd.DataFrame({"id": None, "data": df["data"], "descricao": "Fatura " + df["cartao"],
-                         "categoria": "Cartão de crédito", "grupo": "Cartão de crédito",
+                         "categoria": "Cartão de crédito", "grupo": "Cartão de crédito", "nao_contar": False,
                          "valor": -df["total"].astype(float),
                          "status": df["paga"].map({True: "pago", False: "previsto"}), "conta": df["conta"],
                          "fonte": "fatura"})
 
 
-_VAZIO = ["id", "data", "descricao", "categoria", "grupo", "valor", "status", "conta", "fonte"]
+_VAZIO = ["id", "data", "descricao", "categoria", "grupo", "nao_contar", "valor", "status", "conta", "fonte"]
 
 
 def _contas_caixa_ids(u) -> list:
@@ -95,6 +95,7 @@ def _movimentos_brutos(u, conta_ids: list) -> pd.DataFrame:
     df = db.consultar("""
         select l.id, coalesce(l.data_pagamento, l.data_vencimento) as data, l.descricao,
                coalesce(cat.nome, '—') as categoria, coalesce(pai.nome, cat.nome, '—') as grupo,
+               l.nao_contar,
                case when l.tipo = 'receita' then l.valor else -l.valor end as valor,
                l.status::text as status, coalesce(l.conta_id, cast(:p as uuid)) as conta,
                case when l.conta_id is null then 'sem_conta' else 'lancamento' end as fonte
@@ -106,7 +107,7 @@ def _movimentos_brutos(u, conta_ids: list) -> pd.DataFrame:
                     and coalesce(l.forma_pagamento, '') <> 'Cartao de Credito'))
         union all
         select l.id, coalesce(l.data_pagamento, l.data_vencimento), l.descricao, coalesce(cat.nome, '—'),
-               coalesce(pai.nome, cat.nome, '—'), l.valor, l.status::text, l.conta_destino_id, 'entrada_transf'
+               coalesce(pai.nome, cat.nome, '—'), false, l.valor, l.status::text, l.conta_destino_id, 'entrada_transf'
           from lancamentos l left join categorias cat on cat.id = l.categoria_id
           left join categorias pai on pai.id = cat.pai_id
          where l.dono_id = :u and l.status <> 'cancelado' and l.tipo = 'transferencia'
@@ -218,7 +219,7 @@ def extrato(u, conta_ids: list, ini: date, fim: date) -> tuple[float, pd.DataFra
                 corrente += float(dia["valor"].sum()) if not dia.empty else 0.0
                 if d in mapa and abs(mapa[d] - corrente) > 0.004:
                     linhas.append(pd.DataFrame([{"id": None, "data": d, "descricao": "Ajuste (saldo informado)",
-                                                 "categoria": "Ajuste", "grupo": "Ajuste",
+                                                 "categoria": "Ajuste", "grupo": "Ajuste", "nao_contar": False,
                                                  "valor": round(mapa[d] - corrente, 2),
                                                  "status": "pago", "conta": c, "fonte": "ajuste"}]))
                     corrente = mapa[d]

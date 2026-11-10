@@ -52,6 +52,8 @@ if not ext.empty:
     entram = set(ext.loc[ext["fonte"] == "entrada_transf", "id"].dropna())
     ext["interna"] = ext["id"].isin(entram) & (
         (ext["fonte"] == "entrada_transf") | ((ext["valor"] < 0) & (ext["fonte"] != "fatura")))
+    # "não contar": passa pela conta (saldo) mas fica fora de entradas/saídas e da sobra
+    ext["interna"] |= ext["nao_contar"].fillna(False).astype(bool)
 
 linhas_mes, saldo = [], s0
 for m in meses:

@@ -133,7 +133,7 @@ def lancamentos(u, escopo="eu", mes_ini=None, mes_fim=None) -> pd.DataFrame:
                l.tipo::text as tipo, l.categoria, l.subcategoria, l.conta, l.forma_pagamento,
                l.status::text as status, l.parcela_num, l.parcela_total, l.grupo_parcela,
                l.data_compra, l.visibilidade_efetiva::text as visibilidade, l.origem::text as origem,
-               l.observacao, (l.dono_id = :uid) as meu
+               l.observacao, (l.dono_id = :uid) as meu, coalesce(l.nao_contar, false) as nao_contar
           from v_lancamentos l
          where {_filtro_escopo(escopo, detalhe=True)}
            and (cast(:ini as int) is null or l.mes_ref >= :ini)
@@ -153,6 +153,7 @@ def totais_por_mes(u, escopo="eu", mes_ini=None, mes_fim=None) -> pd.DataFrame:
            and (cast(:ini as int) is null or l.mes_ref >= :ini)
            and (cast(:fim as int) is null or l.mes_ref <= :fim)
            and l.status <> 'cancelado'
+           and not coalesce(l.nao_contar, false)
          group by 1,2,3,4,5 order by 1""",
         uid=u["id"], grupo=u["grupo_id"], ini=mes_ini, fim=mes_fim)
 
@@ -219,7 +220,7 @@ def mudar_status(u, ids: list, status: str):
 def lancamento(u, lanc_id) -> dict | None:
     return db.um("""select id, conta_id, conta_destino_id, categoria_id, tipo::text as tipo, descricao, valor,
                            data_compra, data_vencimento, data_pagamento, forma_pagamento, status::text as status,
-                           parcela_num, parcela_total, grupo_parcela, recorrencia_id, observacao, origem::text as origem
+                           parcela_num, parcela_total, grupo_parcela, recorrencia_id, observacao, origem::text as origem, nao_contar
                       from lancamentos where id = :id and dono_id = :uid""", id=lanc_id, uid=u["id"])
 
 
@@ -231,10 +232,11 @@ def atualizar_lancamento(u, lanc_id, d: dict, parcelas_futuras=False):
                              status = cast(:status as status_lancamento),
                              data_pagamento = case when :status = 'pago'
                                                    then coalesce(data_pagamento, :data_vencimento) end,
+                             nao_contar = coalesce(:nao_contar, nao_contar),
                              atualizado_em = now()
                            where id = :id and dono_id = :uid"""),
                   {k: d.get(k) for k in ["descricao", "valor", "categoria_id", "conta_id", "data_compra",
-                                         "data_vencimento", "status"]} | {"id": lanc_id, "uid": u["id"]})
+                                         "data_vencimento", "status", "nao_contar"]} | {"id": lanc_id, "uid": u["id"]})
         if parcelas_futuras:
             s.execute(text("""update lancamentos x set descricao = :descricao, valor = :valor,
                                  categoria_id = :categoria_id, atualizado_em = now()

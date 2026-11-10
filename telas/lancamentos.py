@@ -99,6 +99,8 @@ df["valor"] = df["valor"].astype(float)
 df["parcela"] = df.apply(lambda r: f"{int(r.parcela_num)}/{int(r.parcela_total)}"
                          if pd.notna(r.parcela_num) else "", axis=1)
 df["sit"] = df["status"].map({"previsto": "⏳", "pago": "✅"})
+if "nao_contar" in df:
+    df.loc[df["nao_contar"].fillna(False).astype(bool), "sit"] = "↔︎"   # só passa pela conta, não conta
 
 desp = df.loc[df["tipo"] == "despesa", "valor"].sum()
 rec = df.loc[df["tipo"] == "receita", "valor"].sum()
@@ -313,6 +315,8 @@ def _lista_celular(dfp: pd.DataFrame, aba: str):
             sub = " · ".join(x for x in [r["conta"] if isinstance(r["conta"], str) else "sem conta",
                                           r["subcategoria"] if isinstance(r["subcategoria"], str) else r["categoria"],
                                           r["parcela"]] if x)
+            if bool(r.get("nao_contar")):
+                chip, cls = "Não conta", "mute"
             with st.container(key=f"lrow_{aba}_{idx}"):
                 _ui.render(f"""<div class="ui-lrow"><div class="dia"><b>{d.day:02d}</b><span>{MESES_C[d.month - 1]}</span></div>
                     <div class="tx"><div class="t">{_ui.esc(r['descricao'])}</div><div class="s">{_ui.esc(sub)}</div></div>

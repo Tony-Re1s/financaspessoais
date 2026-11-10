@@ -32,6 +32,8 @@ def placar(u) -> dict:
         entram = set(ext.loc[ext["fonte"] == "entrada_transf", "id"].dropna())
         interna = ext["id"].isin(entram) & ((ext["fonte"] == "entrada_transf")
                                             | ((ext["valor"] < 0) & (ext["fonte"] != "fatura")))
+        # "não contar": passa pela conta mas fica fora de entradas/saídas (ex.: repasse da mãe)
+        interna |= ext["nao_contar"].fillna(False).astype(bool)
         real = ext[(ext["fonte"] != "ajuste") & ~interna]
         ent = float(real.loc[real["valor"] > 0, "valor"].sum())
         sai = float(-real.loc[real["valor"] < 0, "valor"].sum())
