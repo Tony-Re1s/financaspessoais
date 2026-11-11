@@ -133,6 +133,47 @@ else:
     v["classe_n"] = v["classe"].map(inv.CLASSES)
     v["atualizado"] = pd.to_datetime(v["data_posicao"])
     v["vencimento"] = pd.to_datetime(v["vencimento"])
+    # --- evolução da carteira ---------------------------------------------------------------------
+    st.markdown("<div class='ui-sec'>Evolução</div>", unsafe_allow_html=True)
+    e1, e2 = st.columns([1.4, 1]) if not cel else (st.container(), st.container())
+    op_ev = {None: "Toda a carteira"} | {r.id: f"{r.instituicao} · {r.nome}" for r in v.itertuples()}
+    ev_ativo = e1.selectbox("Ver", list(op_ev), format_func=op_ev.get, key="ev_ativo", label_visibility="collapsed")
+    ev_meses = e2.segmented_control("Período", [6, 12, 24], default=12, key="ev_meses",
+                                    format_func=lambda n: f"{n} meses", label_visibility="collapsed") or 12
+    ev = inv.evolucao(u, int(ev_meses), ev_ativo)
+    if ev.empty or (ev["valor"] == 0).all():
+        st.caption("Sem histórico ainda. Informe a posição de cada aplicação de tempos em tempos "
+                   "(na ficha, botão de atualizar saldo) e a evolução aparece aqui.")
+    else:
+        ev["mes_lbl"] = pd.to_datetime(ev["fim"])
+        _M = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+        ev["rotulo"] = [f"{_M[int(m) % 100 - 1]}/{str(int(m) // 100)[2:]}" for m in ev["mes"]]
+        base = alt.Chart(ev).encode(x=alt.X("rotulo:N", title=None, sort=None,
+                                            axis=alt.Axis(grid=False, labelAngle=0)))
+        area = base.mark_area(color="#0B7A66", opacity=.18, line={"color": "#0B7A66", "strokeWidth": 2}).encode(
+            y=alt.Y("valor:Q", title=None, axis=alt.Axis(format=",.0f", gridOpacity=.2)),
+            tooltip=[alt.Tooltip("rotulo:N", title="Mês"), alt.Tooltip("valor:Q", title="Valor", format=",.2f"),
+                     alt.Tooltip("aplicado:Q", title="Aplicado", format=",.2f"), alt.Tooltip("ganho:Q", title="Ganho", format=",.2f")])
+        linha_ap = base.mark_line(color="#64748B", strokeDash=[4, 3], strokeWidth=1.5).encode(y="aplicado:Q")
+        pontos = base.mark_circle(color="#0B7A66", size=40).encode(y="valor:Q")
+        st.altair_chart((area + linha_ap + pontos).properties(height=240 if cel else 300), use_container_width=True)
+        st.caption("Área: valor da carteira no fim de cada mês · linha tracejada: quanto você aplicou (aportes − resgates). "
+                   "A distância entre as duas é o ganho.")
+        ult, prim = ev.iloc[-1], ev[ev["valor"] > 0].iloc[0]
+        meses_c = max(len(ev[ev["valor"] > 0]) - 1, 1)
+        rend_tot = float(ev["rendimento_mes"].fillna(0).sum())
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Rendeu no período", brl(rend_tot))
+        c2.metric("Aportou no período", brl(float(ev["aporte_mes"].fillna(0).sum())))
+        c3.metric("Rendimento médio/mês", brl(rend_tot / meses_c))
+        with st.expander("Mês a mês"):
+            tb = ev[["mes_lbl", "valor", "aporte_mes", "rendimento_mes", "ganho"]].copy()
+            st.dataframe(em_reais(tb, "valor", "aporte_mes", "rendimento_mes", "ganho"), hide_index=True,
+                         use_container_width=True,
+                         column_config={"mes_lbl": st.column_config.DateColumn("Mês", format="MMM/YY"),
+                                        "valor": col_rs("Valor no fim do mês"), "aporte_mes": col_rs("Aportes"),
+                                        "rendimento_mes": col_rs("Rendimento"), "ganho": col_rs("Ganho acumulado")})
+
     st.markdown("<div class='ui-sec'>Aplicações</div>", unsafe_allow_html=True)
     if cel:
         with st.container(key="llista_inv"):

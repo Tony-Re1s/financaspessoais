@@ -120,3 +120,62 @@ def excluir(ativo_id):
 def total_hoje(u) -> float:
     a = ativos(u)
     return float(a["valor_atual"].sum()) if not a.empty else 0.0
+
+
+def evolucao(u, meses: int = 12, ativo_id=None) -> pd.DataFrame:
+    """Carteira mês a mês: valor no fim de cada mês, aplicado acumulado e ganho.
+
+    Valor de cada aplicação num mês = última posição informada até o fim do mês + aportes − resgates
+    feitos depois dessa posição (mesma regra do valor de hoje). Sem posição ainda: aportes + rendimentos.
+    Pagamentos vinculados (ex.: CAP PIC) contam como aporte na data do pagamento."""
+    from core.fmt import dia_no_mes, mes_ref, somar_meses
+    filtro = "and a.id = :a" if ativo_id else ""
+    mov = db.consultar(f"""
+        select m.ativo_id, m.data, m.tipo::text as tipo, m.valor
+          from ativo_movimentos m join ativos a on a.id = m.ativo_id join contas c on c.id = a.conta_id
+         where c.dono_id = :u {filtro}
+        union all
+        select a.id, coalesce(l.data_pagamento, l.data_vencimento), 'aporte', l.valor
+          from ativos a join contas c on c.id = a.conta_id
+          join lancamentos l on l.dono_id = c.dono_id and l.status = 'pago' and l.tipo = 'despesa'
+                            and lower(l.descricao) = lower(a.vinculo_descricao)
+         where a.vinculo_descricao is not null and c.dono_id = :u {filtro}""", u=u["id"], a=ativo_id)
+    pos = db.consultar(f"""
+        select p.ativo_id, p.data, p.valor_bruto from ativo_posicoes p join ativos a on a.id = p.ativo_id
+          join contas c on c.id = a.conta_id where c.dono_id = :u {filtro}""", u=u["id"], a=ativo_id)
+    for d in (mov, pos):
+        if not d.empty:
+            d["data"] = pd.to_datetime(d["data"]).dt.date
+    if not mov.empty:
+        mov["valor"] = mov["valor"].astype(float)
+    if not pos.empty:
+        pos["valor_bruto"] = pos["valor_bruto"].astype(float)
+    ids = set(mov["ativo_id"]) | set(pos["ativo_id"]) if not (mov.empty and pos.empty) else set()
+    atual = mes_ref(hoje())
+    linhas = []
+    for k in range(meses - 1, -1, -1):
+        m = somar_meses(atual, -k)
+        fim = dia_no_mes(m // 100, m % 100, 31)
+        valor = aplicado = 0.0
+        for aid in ids:
+            mv = mov[(mov["ativo_id"] == aid) & (mov["data"] <= fim)] if not mov.empty else mov
+            ps = pos[(pos["ativo_id"] == aid) & (pos["data"] <= fim)] if not pos.empty else pos
+            liq = lambda d: float((d.loc[d["tipo"] == "aporte", "valor"].sum()
+                                   - d.loc[d["tipo"] == "resgate", "valor"].sum())) if not d.empty else 0.0
+            aplicado += liq(mv)
+            if not ps.empty:
+                ult = ps.sort_values("data").iloc[-1]
+                depois = mv[mv["data"] > ult["data"]] if not mv.empty else mv
+                valor += float(ult["valor_bruto"]) + liq(depois)
+            else:
+                rend = float(mv.loc[mv["tipo"].isin(["rendimento"]), "valor"].sum()
+                             - mv.loc[mv["tipo"].isin(["ir_retido", "taxa"]), "valor"].sum()) if not mv.empty else 0.0
+                valor += liq(mv) + rend
+        linhas.append({"mes": m, "fim": fim, "valor": round(valor, 2), "aplicado": round(aplicado, 2),
+                       "ganho": round(valor - aplicado, 2)})
+    df = pd.DataFrame(linhas)
+    if not df.empty:
+        df["variacao"] = df["valor"].diff()
+        df["aporte_mes"] = df["aplicado"].diff()
+        df["rendimento_mes"] = df["variacao"] - df["aporte_mes"]
+    return df
