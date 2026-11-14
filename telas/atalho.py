@@ -22,16 +22,23 @@ tk = caixa.token(u)
 aba_ios, aba_android = st.tabs(["🍎 iPhone (Apple Pay)", "🤖 Android"])
 
 with aba_ios:
-    st.subheader("1. Crie a automação")
     st.markdown("""
-    No iPhone, abra o app **Atalhos** → aba **Automação** → **+** (Nova automação) → **Transação**.
-    - **Cartão**: marque todos os seus cartões da Carteira.
-    - Marque **Executar Imediatamente** (e desligue *Notificar ao Executar*, se quiser).
-    - Toque **Avançar** → **Nova Automação em Branco**.
-    """)
+Funciona **mesmo sem internet** na hora do pagamento: cada compra é guardada num arquivo no iPhone e enviada
+quando der — na próxima compra com rede ou no horário programado. Se chegar duas vezes, o app descarta a repetição.
+São **dois atalhos** e **duas automações**.
+""")
 
-    st.subheader("2. Adicione a ação “Obter Conteúdo do URL”")
-    st.markdown("Busque a ação **Obter Conteúdo do URL** e preencha (toque em *Mostrar Mais*):")
+    st.subheader("1. Atalho “Finanças · Enviar”")
+    st.markdown("""
+Abra o app **Atalhos** → aba **Atalhos** → **+** → nome **Finanças · Enviar**. Adicione, nesta ordem:
+
+**a) Obter Arquivo** — toque em *Mostrar Mais*: **Serviço** `Atalhos (iCloud Drive)`, **Caminho do Arquivo**
+`financas-pendentes.txt`, **Mostrar Seletor de Documento** desligado, **Erro Se Não Encontrado** desligado.
+
+**b) Se** → `Arquivo` **não tem valor** → dentro do *Se*: **Parar Este Atalho**. (Apague o *Caso contrário*.)
+
+**c) Obter Conteúdo do URL** (depois do *Fim do Se*) — toque em *Mostrar Mais*:
+""")
     st.markdown("**URL**")
     st.code(f"https://{host}/sql", language=None)
     st.markdown("**Método:** `POST`  \n**Cabeçalhos** — adicione dois:")
@@ -39,28 +46,54 @@ with aba_ios:
     st.code(url_atalho, language=None)
     st.markdown("`Content-Type`")
     st.code("application/json", language=None)
-
     st.markdown("**Corpo da Solicitação:** `JSON`, com dois campos:")
-    st.markdown("1) campo **Texto** chamado `query`, com este valor:")
-    st.code("insert into caixa_entrada (token, valor_texto, estabelecimento, cartao, nome) "
-            "values ($1, $2, $3, $4, $5)", language=None)
-    st.markdown("2) campo **Matriz** chamado `params`, com **5 itens de Texto**, nesta ordem:")
+    st.markdown("1) campo **Texto** chamado `query`, com este valor (copie inteiro):")
+    st.code(caixa.SQL_ATALHO_FILA, language=None)
+    st.markdown("2) campo **Matriz** chamado `params`, com **2 itens de Texto**, nesta ordem:")
     st.markdown(f"""
     | # | Item | O que colocar |
     |---|---|---|
     | 1 | seu token | `{tk}` |
-    | 2 | valor | variável **Quantia** da *Entrada do Atalho* |
-    | 3 | estabelecimento | variável **Estabelecimento** (*Comerciante*) |
-    | 4 | cartão | variável **Cartão ou Passe** |
-    | 5 | nome | variável **Nome** |
+    | 2 | compras | a variável **Arquivo** (da ação *Obter Arquivo*) |
     """)
-    st.caption("As variáveis aparecem tocando no campo e escolhendo *Entrada do Atalho* → toque nela de novo para "
-               "escolher a propriedade (Quantia, Estabelecimento…). Os nomes podem variar um pouco conforme o iOS.")
+    st.markdown("""
+**d) Apagar Arquivos** → `Arquivo` — *Mostrar Mais*: **Perguntar Imediatamente** desligado.
 
-    st.subheader("3. Teste")
-    st.markdown("Pague qualquer coisa com o Apple Pay e abra a **Caixa de entrada**. "
-                "Na primeira compra de cada cartão, escolha qual conta do app ele é e marque **Lembrar** — "
-                "nas próximas o app já preenche sozinho.")
+Se o envio falhar (sem internet), o atalho para no passo *c* e o arquivo fica guardado para a próxima vez.
+""")
+
+    st.subheader("2. Automação de compra")
+    st.markdown("""
+Aba **Automação** → **+** → **Transação**: marque todos os cartões da Carteira, **Executar Imediatamente**
+ligado, *Notificar ao Executar* desligado → **Avançar** → **Nova Automação em Branco**. Adicione:
+
+**a) Texto** — uma linha só, com cinco variáveis da *Entrada do Atalho* separadas por **ponto e vírgula**:
+""")
+    st.code("Data;Quantia;Estabelecimento;Cartão ou Passe;Nome", language=None)
+    st.caption("Toque no campo → *Entrada do Atalho* → toque nela de novo para escolher a propriedade (Data, "
+               "Quantia, Estabelecimento, Cartão ou Passe, Nome). Na variável **Data**, toque nela e em "
+               "**Formato de Data** escolha *Personalizado* com `yyyy-MM-dd HH:mm` — assim a compra entra com a hora "
+               "certa mesmo que só seja enviada no dia seguinte.")
+    st.markdown("""
+**b) Anexar ao Arquivo de Texto** → o `Texto` acima — *Mostrar Mais*: **Serviço** `Atalhos (iCloud Drive)`,
+**Caminho do Arquivo** `financas-pendentes.txt`, **Criar Nova Linha** ligado.
+
+**c) Executar Atalho** → `Finanças · Enviar`.
+""")
+
+    st.subheader("3. Automação de horário (esvazia a fila)")
+    st.markdown("""
+Aba **Automação** → **+** → **Hora do Dia** → ex.: **20:00**, *Diariamente*, **Executar Imediatamente** →
+**Avançar** → ação **Executar Atalho** → `Finanças · Enviar`. Se quiser, crie outra igual para as 12:00.
+""")
+
+    st.subheader("4. Teste")
+    st.markdown("Pague qualquer coisa com o Apple Pay e abra a **Caixa de entrada**. Para testar o modo offline, "
+                "ligue o modo avião, pague, desligue e rode o atalho **Finanças · Enviar** na mão: a compra aparece. "
+                "Na primeira compra de cada cartão, escolha qual conta do app ele é e marque **Lembrar**.")
+    with st.expander("Já tinha a automação antiga (uma ação só)?"):
+        st.markdown("Ela continua funcionando, mas perde a compra quando não há internet. Troque pela versão acima: "
+                    "apague a automação antiga e crie as duas novas.")
 
 
 with aba_android:

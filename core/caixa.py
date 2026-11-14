@@ -1,12 +1,42 @@
 """Caixa de entrada: o que chega sozinho (Apple Pay…) e espera confirmação."""
 import re
 import secrets
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 import pandas as pd
 from sqlalchemy import text
 
 from core import db
+from core.fmt import FUSO
+
+# o que o Atalho manda: uma compra por linha, campos separados por ';' (ver telas/atalho.py)
+SEPARADOR = ";"
+SQL_ATALHO_FILA = (
+    "insert into caixa_entrada (token, compra_texto, valor_texto, estabelecimento, cartao, nome) "
+    "select $1, nullif(btrim(f[1]), ''), btrim(f[2]), btrim(f[3]), btrim(f[4]), btrim(f[5]) "
+    "from regexp_split_to_table($2, E'\\r?\\n') as l, lateral (select string_to_array(l, ';')) as t(f) "
+    "where btrim(l) <> '' and array_length(f, 1) >= 2 on conflict do nothing")
+
+_FORMATOS_DATA = ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y, %H:%M",
+                  "%d/%m/%y, %H:%M", "%d/%m/%y %H:%M", "%d/%m/%Y", "%Y-%m-%d")
+
+
+def quando(compra_texto, recebido_em) -> pd.Timestamp:
+    """Momento da compra: a data que a Carteira mandou (texto) ou, se não veio/não entendeu, quando chegou."""
+    t = str(compra_texto).strip() if isinstance(compra_texto, str) else ""
+    if t:
+        for f in _FORMATOS_DATA:
+            try:
+                return pd.Timestamp(datetime.strptime(t, f)).tz_localize(FUSO)
+            except ValueError:
+                continue
+        try:
+            d = pd.to_datetime(t, dayfirst=True)
+            return d.tz_localize(FUSO) if d.tzinfo is None else d.tz_convert(FUSO)
+        except (ValueError, TypeError):
+            pass
+    return pd.Timestamp(recebido_em).tz_convert(FUSO)
 
 
 def valor_de_texto(t) -> float | None:
@@ -43,7 +73,7 @@ def novo_token(u) -> str:
 
 def pendentes(u) -> pd.DataFrame:
     return normalizar(db.consultar("""
-        select c.id, c.recebido_em, c.origem, c.valor_texto, c.estabelecimento, c.cartao, c.nome
+        select c.id, c.recebido_em, c.compra_texto, c.origem, c.valor_texto, c.estabelecimento, c.cartao, c.nome
           from caixa_entrada c join usuarios us on us.token_atalho = c.token
          where us.id = :u and c.status = 'pendente'
          order by c.recebido_em desc""", u=u["id"]))
@@ -57,7 +87,7 @@ def qtd_pendentes(u) -> int:
 
 def historico(u, limite=30) -> pd.DataFrame:
     return db.consultar("""
-        select c.recebido_em, c.estabelecimento, c.valor_texto, c.cartao, c.status
+        select c.recebido_em, c.compra_texto, c.estabelecimento, c.valor_texto, c.cartao, c.status
           from caixa_entrada c join usuarios us on us.token_atalho = c.token
          where us.id = :u and c.status <> 'pendente'
          order by coalesce(c.tratado_em, c.recebido_em) desc limit :l""", u=u["id"], l=limite)

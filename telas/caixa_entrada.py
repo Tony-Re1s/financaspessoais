@@ -18,7 +18,7 @@ if msg := st.session_state.pop("_ok_caixa", None):
 pend = caixa.pendentes(u)
 if not pend.empty:
     _tot = sum(v for v in (caixa.valor_de_texto(x) for x in pend["valor_texto"]) if v)
-    _velha = pd.Timestamp(pend["recebido_em"].min()).tz_convert(FUSO)
+    _velha = min(caixa.quando(r.compra_texto, r.recebido_em) for r in pend.itertuples())
     cartoes_kpi([("Total para conferir", brl(_tot)), ("Compras", str(len(pend))),
                  ("Mais antiga", f"{_velha:%d/%m %H:%M}")], titulo="Compras chegando",
                 icone="📥", destaque=0, c1="#123B5C", c2="#1F6FA8")
@@ -72,7 +72,7 @@ else:
             except Exception:  # noqa: BLE001 — sem IA, segue com o que tem
                 pass
         valor = caixa.valor_de_texto(item.valor_texto)
-        quando = pd.Timestamp(item.recebido_em).tz_convert(FUSO)
+        quando = caixa.quando(item.compra_texto, item.recebido_em)
         k = str(item.id)
         _lig = caixa.conta_do_cartao(u, item.cartao)
         _cl = contas[contas["id"] == _lig]
@@ -189,7 +189,8 @@ else:
 hist = caixa.historico(u)
 if not hist.empty:
     with st.expander("Já tratados"):
-        hist["recebido_em"] = pd.to_datetime(hist["recebido_em"]).dt.tz_convert(FUSO).dt.strftime("%d/%m %H:%M")
+        hist["recebido_em"] = [caixa.quando(r.compra_texto, r.recebido_em).strftime("%d/%m %H:%M") for r in hist.itertuples()]
+        hist = hist.drop(columns=["compra_texto"])
         hist["status"] = hist["status"].map({"lancado": "✅ lançado", "ignorado": "🚫 ignorado"})
         st.dataframe(hist, hide_index=True, use_container_width=True,
                      column_config={"recebido_em": "Quando", "estabelecimento": "Onde",

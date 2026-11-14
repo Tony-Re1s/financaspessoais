@@ -162,6 +162,14 @@ _MIGRACOES = [
     # 010 — cor escolhida pelo usuário para o cartão/conta (hex); vazio = cor do banco
     ("select 1 from information_schema.columns where table_name = 'contas' and column_name = 'cor'",
      "alter table contas add column if not exists cor text"),
+    # 014 — caixa de entrada com fila no celular: o atalho manda a data real da compra (texto, como a Carteira
+    #       formatou) e pode reenviar o que ficou sem internet; o índice único descarta a repetição.
+    #       Linhas sem compra_texto (atalho antigo) nunca conflitam entre si (entra o id na chave).
+    ("select 1 from information_schema.columns where table_name = 'caixa_entrada' and column_name = 'compra_texto'",
+     """alter table caixa_entrada add column if not exists compra_texto text;
+        create unique index if not exists ux_caixa_entrada_repetida on caixa_entrada
+          (token, coalesce(compra_texto, id::text), coalesce(valor_texto, ''), coalesce(estabelecimento, ''),
+           coalesce(cartao, ''))"""),
 ]
 
 
