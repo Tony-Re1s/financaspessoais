@@ -50,6 +50,9 @@ class Extrato:
     conta_banco: str | None = None    # nº da conta no banco (para reconhecer a conta no app)
     titular: str | None = None        # nome do titular (reconhece transferências entre contas próprias)
     avisos: list[str] = field(default_factory=list)
+    receita_nova: dict | None = None  # formato aprendido agora (guardar depois que a importação confirmar)
+    impressao: str | None = None
+    motor: str | None = None
 
 
 def _sem_acento(s: str) -> str:
@@ -129,7 +132,26 @@ class FormatoDesconhecido(Exception):
     pass
 
 
-def ler(arquivos: list[tuple[str, bytes]]) -> Extrato:
+def _ler_desconhecido(nome: str, dados: bytes, u) -> Extrato:
+    from core import leitores
+    try:
+        ld = leitores.ler_desconhecido("extrato", nome, dados, u)
+    except ValueError as e:
+        raise FormatoDesconhecido(f"{nome}: {e}") from e
+    linhas = [Linha(d["data"], re.sub(r"\s{2,}", " ", d["descricao"]), d["valor"], d.get("ident")) for d in ld.linhas]
+    saldos = sorted({d["data"]: float(d["saldo"]) for d in ld.linhas if d.get("saldo") is not None}.items())
+    ex = Extrato(ld.banco, ld.formato, linhas, saldos, conta_banco=ld.extras.get("conta"),
+                 titular=ld.extras.get("titular"), avisos=list(ld.avisos), receita_nova=ld.receita_nova,
+                 impressao=ld.impressao, motor=ld.motor)
+    if ex.receita_nova:
+        ex.avisos.insert(0, f"Formato novo ({ex.banco}): aprendi a ler este arquivo. Confira os valores; ao gravar, "
+                            "o formato fica salvo e as próximas importações dele entram direto.")
+    if not saldos:
+        ex.avisos.append("Este extrato não trouxe saldo — informe o saldo de hoje em Contas correntes depois de importar.")
+    return ex
+
+
+def ler(arquivos: list[tuple[str, bytes]], u=None) -> Extrato:
     """Um ou mais arquivos do MESMO banco/conta (ex.: Nubank set + out)."""
     exs = []
     for nome, dados in arquivos:
@@ -138,7 +160,7 @@ def ler(arquivos: list[tuple[str, bytes]]) -> Extrato:
                 exs.append(leitor(nome, dados))
                 break
         else:
-            raise FormatoDesconhecido(nome)
+            exs.append(_ler_desconhecido(nome, dados, u))
     if len({e.formato for e in exs}) > 1:
         raise ValueError("Suba um banco por vez.")
     base = exs[0]
@@ -152,7 +174,8 @@ def ler(arquivos: list[tuple[str, bytes]]) -> Extrato:
             linhas.append(ln)
     saldos = sorted({d: v for e in exs for d, v in e.saldos}.items())
     return Extrato(base.banco, base.formato, sorted(linhas, key=lambda x: x.data), saldos,
-                   conta_banco=base.conta_banco, titular=base.titular, avisos=base.avisos)
+                   conta_banco=base.conta_banco, titular=base.titular, avisos=base.avisos,
+                   receita_nova=base.receita_nova, impressao=base.impressao, motor=base.motor)
 
 
 # ---------------------------------------------------------------------------

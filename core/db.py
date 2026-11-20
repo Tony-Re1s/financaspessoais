@@ -170,6 +170,21 @@ _MIGRACOES = [
         create unique index if not exists ux_caixa_entrada_repetida on caixa_entrada
           (token, coalesce(compra_texto, id::text), coalesce(valor_texto, ''), coalesce(estabelecimento, ''),
            coalesce(cartao, ''))"""),
+    # 015 — leitores aprendidos: receita de leitura de fatura/extrato de formato novo (ver core/leitores.py);
+    #       compartilhada entre todos os usuários, identificada pela impressão digital do formato
+    ("select 1 from information_schema.tables where table_name = 'leitores_aprendidos'",
+     """create table if not exists leitores_aprendidos (
+          id          uuid primary key default gen_random_uuid(),
+          tipo        text not null check (tipo in ('fatura', 'extrato')),
+          impressao   text not null,
+          banco       text,
+          motor       text not null,
+          receita     jsonb not null,
+          criado_por  uuid references usuarios(id) on delete set null,
+          criado_em   timestamptz not null default now(),
+          usos        int not null default 0,
+          ultimo_uso  timestamptz,
+          unique (tipo, impressao))"""),
 ]
 
 

@@ -84,3 +84,28 @@ with st.expander("Remover pessoa"):
         st.cache_data.clear()
         st.session_state["_ok_usu"] = f"{alvo} removido."
         st.rerun()
+
+
+# --- formatos de arquivo aprendidos (importação de fatura/extrato) -----------------------------
+st.divider()
+with st.expander("📄 Formatos de arquivo aprendidos", expanded=False):
+    from core import leitores
+    st.caption("Receitas de leitura que o app aprendeu com a IA na primeira importação de um banco novo. "
+               "Valem para todos os usuários. Apague uma se o banco mudou o leiaute e a leitura saiu errada — "
+               "a próxima importação aprende de novo.")
+    rec = leitores.listar()
+    if rec.empty:
+        st.info("Nenhum formato aprendido ainda. Itaú, Nubank e OFX já têm leitor fixo.")
+    else:
+        mostra = rec.assign(criado_em=pd.to_datetime(rec["criado_em"]).dt.strftime("%d/%m/%y"),
+                            ultimo_uso=pd.to_datetime(rec["ultimo_uso"]).dt.strftime("%d/%m/%y"))
+        st.dataframe(mostra[["tipo", "banco", "motor", "usos", "criado_em", "ultimo_uso", "criado_por"]],
+                     hide_index=True, use_container_width=True,
+                     column_config={"tipo": "Tipo", "banco": "Banco", "motor": "Motor", "usos": "Usos",
+                                    "criado_em": "Aprendido em", "ultimo_uso": "Último uso", "criado_por": "Por"})
+        op = {str(r.id): f"{r.tipo} · {r.banco} ({r.motor})" for r in rec.itertuples()}
+        alvo_r = st.selectbox("Apagar formato", list(op), format_func=op.get, index=None, placeholder="Escolha…")
+        if st.button("Apagar formato", disabled=alvo_r is None, icon=":material/delete:"):
+            leitores.apagar(alvo_r)
+            st.session_state["_ok_usu"] = f"Formato {op[alvo_r]} apagado."
+            st.rerun()

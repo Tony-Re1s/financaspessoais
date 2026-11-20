@@ -57,6 +57,9 @@ class Fatura:
     total_banco: float | None = None
     nome_cartao: str | None = None
     avisos: list[str] = field(default_factory=list)
+    receita_nova: dict | None = None  # formato aprendido agora (guardar depois que a importação confirmar)
+    impressao: str | None = None
+    motor: str | None = None
 
 
 PAGAMENTO = re.compile(r"^(pagamento|pagto|pgto)\b", re.I)
@@ -215,7 +218,8 @@ LEITORES = [
 ]
 
 
-def ler(nome: str, dados: bytes) -> Fatura:
+def ler(nome: str, dados: bytes, u=None, aprender: bool = True) -> Fatura:
+    """Leitores fixos primeiro; formato novo → core/leitores (receita guardada, aprendizado ou IA)."""
     for _, detecta, leitor in LEITORES:
         try:
             if detecta(nome, dados):
@@ -228,7 +232,24 @@ def ler(nome: str, dados: bytes) -> Fatura:
             return _ler_itau_xlsx(nome, dados)
         except Exception:  # noqa: BLE001
             pass
-    raise FormatoDesconhecido(nome)
+    if not aprender:
+        raise FormatoDesconhecido(nome)
+    from core import leitores
+    try:
+        ld = leitores.ler_desconhecido("fatura", nome, dados, u)
+    except ValueError as e:
+        raise FormatoDesconhecido(f"{nome}: {e}") from e
+    linhas = [Linha(data=d["data"], descricao=_limpa(d["descricao"]), valor=d["valor"], parcela_num=d["parcela_num"],
+                    parcela_total=d["parcela_total"], titular=d["titular"], portador=d.get("portador"),
+                    final=d.get("final")) for d in ld.linhas]
+    ex = ld.extras
+    fat = Fatura(ld.banco, ld.formato, linhas, vencimento=ex.get("vencimento"), final=ex.get("final"),
+                 total_banco=ex.get("total"), avisos=list(ld.avisos), receita_nova=ld.receita_nova,
+                 impressao=ld.impressao, motor=ld.motor)
+    if fat.receita_nova:
+        fat.avisos.insert(0, f"Formato novo ({fat.banco}): aprendi a ler este arquivo. Confira o total; ao gravar, "
+                             "o formato fica salvo e as próximas importações dele entram direto.")
+    return fat
 
 
 class FormatoDesconhecido(Exception):

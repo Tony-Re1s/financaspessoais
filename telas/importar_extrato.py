@@ -3,7 +3,7 @@ import hashlib
 import pandas as pd
 import streamlit as st
 
-from core import extratos, ia, repo
+from core import extratos, ia, leitores, repo
 from core.fmt import brl
 from telas import _ui
 from telas._comum import cartoes_kpi, col_rs, e_celular, em_reais, opcoes_categoria, usuario
@@ -17,20 +17,26 @@ if msg := st.session_state.pop("_ok_ext", None):
 
 with st.expander("Bancos que o app já lê"):
     st.markdown("\n".join(f"- {n}" for n, *_ in extratos.LEITORES))
-    st.caption("Outro banco? Mande um arquivo de exemplo que o leitor dele é acrescentado.")
+    st.markdown("- **Qualquer outro banco** (.csv, .xls, .xlsx, .pdf): o app aprende o formato na primeira "
+                "importação e passa a ler sozinho nas seguintes.")
 
 arqs = st.file_uploader("Arquivo(s) do extrato — pode subir vários meses do mesmo banco",
-                        type=["xls", "xlsx", "csv"], accept_multiple_files=True, key="up_extrato")
+                        type=["xls", "xlsx", "csv", "pdf"], accept_multiple_files=True, key="up_extrato")
 if not arqs:
     st.stop()
-try:
-    ex = extratos.ler([(a.name, a.getvalue()) for a in arqs])
-except extratos.FormatoDesconhecido as e:
-    st.warning(f"Ainda não conheço o formato de **{e}**. Mande um exemplo que eu crio o leitor.")
-    st.stop()
-except Exception as e:  # noqa: BLE001
-    st.error(f"Não consegui ler: {e}")
-    st.stop()
+# lido uma vez por sessão (formato novo pode chamar a IA; não repetir a cada clique)
+_k = "ext_lido_" + hashlib.sha1(b"".join(a.getvalue() for a in arqs)).hexdigest()[:16]
+if _k not in st.session_state:
+    try:
+        with st.spinner("Lendo o extrato…"):
+            st.session_state[_k] = extratos.ler([(a.name, a.getvalue()) for a in arqs], u)
+    except extratos.FormatoDesconhecido as e:
+        st.warning(f"Não consegui ler **{e}**.")
+        st.stop()
+    except Exception as e:  # noqa: BLE001
+        st.error(f"Não consegui ler: {e}")
+        st.stop()
+ex = st.session_state[_k]
 for a in ex.avisos:
     st.info(a, icon=":material/info:")
 assinatura = hashlib.sha1(b"".join(a.getvalue() for a in arqs)).hexdigest()[:12]
@@ -151,6 +157,12 @@ st.markdown(f"**{n_novas}** novos · **{len(ja[ja['situacao'] == 'ja_no_app'])}*
             f"**{len(transf)}** transferências" + (f" · **{len(ex.saldos)}** saldos diários" if ex.saldos else ""))
 if st.button("Importar extrato", type="primary", icon=":material/download_done:", use_container_width=True):
     r = extratos.gravar(u, conta_id, ex, regs, ", ".join(a.name for a in arqs))
+    if ex.receita_nova and ex.impressao:
+        try:
+            leitores.guardar("extrato", ex.impressao, ex.motor, ex.receita_nova, u)
+        except Exception:  # noqa: BLE001
+            pass
+    st.session_state.pop(_k, None)
     st.session_state["_ok_ext"] = (f"Extrato importado: {r['novos']} lançamentos novos, {r['pagos']} marcados como "
                                    f"pagos, {r['transf']} transferências, {r['faturas']} faturas baixadas"
                                    + (f", {r['saldos']} saldos" if r["saldos"] else "") + ".")

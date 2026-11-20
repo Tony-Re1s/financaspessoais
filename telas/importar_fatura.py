@@ -1,7 +1,9 @@
+import hashlib
+
 import pandas as pd
 import streamlit as st
 
-from core import faturas, repo
+from core import faturas, leitores, repo
 from core.fmt import brl
 from telas import _ui
 from telas._comum import cartoes_kpi, col_rs, e_celular, em_reais, opcoes_categoria, usuario
@@ -14,21 +16,26 @@ if msg := st.session_state.pop("_ok_fat", None):
 
 with st.expander("Bancos que o app já lê"):
     st.markdown("\n".join(f"- {nome}" for nome, *_ in faturas.LEITORES))
-    st.caption("Banco diferente? Mande um arquivo de exemplo que o leitor dele é acrescentado.")
+    st.markdown("- **Qualquer outro banco** (.csv, .xls, .xlsx, .pdf): o app aprende o formato na primeira "
+                "importação e passa a ler sozinho nas seguintes.")
 
-arq = st.file_uploader("Arquivo da fatura", type=["xlsx", "csv", "ofx"], key="up_fatura")
+arq = st.file_uploader("Arquivo da fatura", type=["xlsx", "xls", "csv", "ofx", "pdf"], key="up_fatura")
 if not arq:
     st.stop()
 
-try:
-    fat = faturas.ler(arq.name, arq.getvalue())
-except faturas.FormatoDesconhecido:
-    st.warning("Ainda não conheço o formato deste arquivo. Mande um exemplo que eu crio o leitor desse banco.",
-               icon=":material/help:")
-    st.stop()
-except Exception as e:  # noqa: BLE001
-    st.error(f"Não consegui ler o arquivo: {e}")
-    st.stop()
+# o arquivo é lido uma vez por sessão (formato novo pode chamar a IA; não repetir a cada clique)
+_k = "fat_lida_" + hashlib.sha1(arq.getvalue()).hexdigest()[:16]
+if _k not in st.session_state:
+    try:
+        with st.spinner("Lendo a fatura…"):
+            st.session_state[_k] = faturas.ler(arq.name, arq.getvalue(), u)
+    except faturas.FormatoDesconhecido as e:
+        st.warning(f"Não consegui ler este arquivo ({e}).", icon=":material/help:")
+        st.stop()
+    except Exception as e:  # noqa: BLE001
+        st.error(f"Não consegui ler o arquivo: {e}")
+        st.stop()
+fat = st.session_state[_k]
 
 for a in fat.avisos:
     st.info(a)
@@ -149,6 +156,12 @@ if st.button("Importar", type="primary", icon=":material/download_done:", use_co
              disabled=escolhidas.empty and not futuras and ja.empty):
     r = faturas.gravar(u, conta_id, fat, vencimento, escolhidas, futuras, arq.name,
                        vincular=regs[regs["situacao"] == "ja_lancada"])
+    if fat.receita_nova and fat.impressao:
+        try:
+            leitores.guardar("fatura", fat.impressao, fat.motor, fat.receita_nova, u)
+        except Exception:  # noqa: BLE001 — não trava a importação por causa da receita
+            pass
+    st.session_state.pop(_k, None)
     st.session_state["_ok_fat"] = (f"Fatura importada: {r['novas']} lançamentos"
                                    + (f" e {r['futuras']} parcelas futuras" if r["futuras"] else "")
                                    + (f"; {r['vinculadas']} já existentes conferidos" if r["vinculadas"] else "")
