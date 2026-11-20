@@ -389,12 +389,18 @@ def _chamar(payload: dict, modelo_: str) -> dict:
         except Exception:  # noqa: BLE001
             msg = r.text[:300]
         raise RuntimeError(f"A IA respondeu erro {r.status_code}: {msg}")
-    return next(b for b in r.json()["content"] if b.get("type") == "tool_use")["input"]
+    blocos = r.json().get("content") or []
+    uso = next((b for b in blocos if b.get("type") == "tool_use"), None)
+    if uso is None:
+        txt = " ".join(b.get("text", "") for b in blocos if b.get("type") == "text")[:300]
+        raise RuntimeError("A IA não devolveu a leitura no formato esperado" + (f": {txt}" if txt else "."))
+    return uso["input"]
 
 
 def _ferramenta(nome, schema, descricao):
+    # tool_choice "auto": alguns modelos não aceitam forçar a ferramenta; a instrução pede para sempre usá-la
     return {"tools": [{"name": nome, "description": descricao, "input_schema": schema}],
-            "tool_choice": {"type": "tool", "name": nome}}
+            "tool_choice": {"type": "auto"}}
 
 
 def _modelos():
@@ -431,7 +437,7 @@ def amostra_tabela(linhas: list[list], n=25) -> str:
 
 def aprender_tabela(tipo: str, linhas: list[list]) -> dict:
     sis = (f"Você escreve a RECEITA para um programa ler um arquivo de {_O_QUE_E[tipo]} brasileiro, em formato de tabela. "
-           "Receba uma amostra (linha a linha, células separadas por ' | ') e chame a ferramenta. Use os textos EXATOS "
+           "Receba uma amostra (linha a linha, células separadas por ' | ') e responda SOMENTE chamando a ferramenta. Use os textos EXATOS "
            "do cabeçalho. Em 'ignorar' ponha regex para linhas que não são lançamentos. Seja preciso: o programa vai "
            "aplicar a receita no arquivo inteiro sem olhar.")
     return _tentar({"max_tokens": 1500, "system": sis,
@@ -441,7 +447,7 @@ def aprender_tabela(tipo: str, linhas: list[list]) -> dict:
 
 def aprender_pdf(tipo: str, texto: str) -> dict:
     sis = (f"Você escreve a RECEITA para um programa ler o TEXTO extraído de um PDF de {_O_QUE_E[tipo]} brasileiro. "
-           "Receba o começo do texto e chame a ferramenta. A regex 'linha' (Python, re.M) precisa casar cada "
+           "Receba o começo do texto e responda SOMENTE chamando a ferramenta. A regex 'linha' (Python, re.M) precisa casar cada "
            "lançamento inteiro numa linha, com grupos nomeados data/descricao/valor (ou credito/debito), e não casar "
            "cabeçalhos, saldos nem totais. Prefira âncoras ^ e $ e classes explícitas (\\d{2}/\\d{2}).")
     return _tentar({"max_tokens": 1500, "system": sis,
@@ -452,7 +458,7 @@ def aprender_pdf(tipo: str, texto: str) -> dict:
 def ler_direto(tipo: str, texto: str | None = None, imagens: list[bytes] | None = None) -> dict:
     """Sem receita: a IA devolve as linhas. {'banco','vencimento','final','total','conta','linhas':[...]}"""
     import base64
-    sis = (f"Extraia TODOS os lançamentos de um(a) {_O_QUE_E[tipo]} brasileiro(a) e chame a ferramenta. "
+    sis = (f"Extraia TODOS os lançamentos de um(a) {_O_QUE_E[tipo]} brasileiro(a) e responda SOMENTE chamando a ferramenta. "
            "Datas em AAAA-MM-DD (se faltar o ano, deduza pelo documento). Não invente linhas; não some nada.")
     cont = []
     for im in imagens or []:
