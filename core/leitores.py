@@ -435,23 +435,23 @@ def amostra_tabela(linhas: list[list], n=25) -> str:
     return "\n".join(out)
 
 
-def aprender_tabela(tipo: str, linhas: list[list]) -> dict:
+def aprender_tabela(tipo: str, linhas: list[list], dica: str | None = None) -> dict:
     sis = (f"Você escreve a RECEITA para um programa ler um arquivo de {_O_QUE_E[tipo]} brasileiro, em formato de tabela. "
            "Receba uma amostra (linha a linha, células separadas por ' | ') e responda SOMENTE chamando a ferramenta. Use os textos EXATOS "
            "do cabeçalho. Em 'ignorar' ponha regex para linhas que não são lançamentos. Seja preciso: o programa vai "
            "aplicar a receita no arquivo inteiro sem olhar.")
-    return _tentar({"max_tokens": 1500, "system": sis,
-                    "messages": [{"role": "user", "content": amostra_tabela(linhas)}]}
+    msg = amostra_tabela(linhas) + (f"\n\n---\n{dica}" if dica else "")
+    return _tentar({"max_tokens": 1500, "system": sis, "messages": [{"role": "user", "content": msg}]}
                    | _ferramenta("receita_tabela", _CAMPOS_TABELA, "Receita de leitura de tabela"))
 
 
-def aprender_pdf(tipo: str, texto: str) -> dict:
+def aprender_pdf(tipo: str, texto: str, dica: str | None = None) -> dict:
     sis = (f"Você escreve a RECEITA para um programa ler o TEXTO extraído de um PDF de {_O_QUE_E[tipo]} brasileiro. "
            "Receba o começo do texto e responda SOMENTE chamando a ferramenta. A regex 'linha' (Python, re.M) precisa casar cada "
            "lançamento inteiro numa linha, com grupos nomeados data/descricao/valor (ou credito/debito), e não casar "
            "cabeçalhos, saldos nem totais. Prefira âncoras ^ e $ e classes explícitas (\\d{2}/\\d{2}).")
-    return _tentar({"max_tokens": 1500, "system": sis,
-                    "messages": [{"role": "user", "content": texto[:9000]}]}
+    msg = texto[:9000] + (f"\n\n---\n{dica}" if dica else "")
+    return _tentar({"max_tokens": 1500, "system": sis, "messages": [{"role": "user", "content": msg}]}
                    | _ferramenta("receita_pdf", _CAMPOS_PDF, "Receita de leitura de PDF"))
 
 
@@ -542,19 +542,46 @@ class Lido:
         self.receita_nova, self.impressao, self.motor, self.avisos = receita_nova, impressao_, motor, avisos or []
 
 
+def _linhas_com_data(texto_ref: str) -> list[str]:
+    """Linhas do arquivo que COMEÇAM com data (ou cuja 1ª célula é data): candidatas a lançamento."""
+    out = []
+    for ln in texto_ref.splitlines():
+        t = re.sub(r"^L\d+:\s*", "", ln).strip()
+        if re.match(r"^\d{2}[/.-]\d{2}([/.-]\d{2,4})?\b|^\d{4}-\d{2}-\d{2}\b", t):
+            out.append(t)
+    return out
+
+
 def _valida(linhas: list[dict], tipo: str, total: float | None, texto_ref: str) -> None:
-    """A receita só vale se leu um tanto razoável. Com total do banco, o total das linhas tem de bater."""
+    """A receita só vale se leu um tanto razoável.
+    1) total do banco conhecido e soma batendo → vale (independe de contagem);
+    2) senão, tem de ler pelo menos metade das linhas que começam com data."""
     if len(linhas) < 1:
         raise SemReceita("a receita não leu nenhuma linha")
-    datas_no_texto = len(re.findall(r"\b\d{2}/\d{2}(?:/\d{2,4})?\b", texto_ref))
-    if datas_no_texto and len(linhas) < 0.5 * min(datas_no_texto, 400):
-        raise SemReceita(f"leu {len(linhas)} linhas de ~{datas_no_texto} datas no arquivo")
     if total and tipo == "fatura":
         soma = sum(ln["valor"] for ln in linhas if ln["titular"]) if any(not ln["titular"] for ln in linhas) \
             else sum(ln["valor"] for ln in linhas)
         soma_tudo = sum(ln["valor"] for ln in linhas)
-        if min(abs(soma - total), abs(soma_tudo - total)) > 0.05 and abs(soma_tudo - total) / max(total, 1) > 0.02:
+        if min(abs(soma - total), abs(soma_tudo - total)) <= 0.05:
+            return
+        if abs(soma_tudo - total) / max(abs(total), 1) > 0.02:
             raise SemReceita(f"soma das linhas {soma_tudo:.2f} ≠ total do banco {total:.2f}")
+    cand = _linhas_com_data(texto_ref)
+    if cand and len(linhas) < 0.5 * min(len(cand), 400):
+        raise SemReceita(f"leu {len(linhas)} de ~{len(cand)} linhas com data")
+
+
+def _faltantes(rec: dict, linhas: list[dict], texto_ref: str, motor: str, n=12) -> str:
+    """Linhas com data que a receita deixou de fora — para a 2ª tentativa da IA."""
+    lidas = {(ln["data"], round(abs(ln["valor"]), 2)) for ln in linhas}
+    fora = []
+    for t in _linhas_com_data(texto_ref):
+        nums = [v for v in (_num(x, rec) for x in re.findall(r"-?[\d.]+,\d{2}|-?\d+\.\d{2}", t)) if v is not None]
+        if not any((d, round(abs(v), 2)) in lidas for d in {ln["data"] for ln in linhas} for v in nums):
+            fora.append(t)
+        if len(fora) >= n:
+            break
+    return "\n".join(fora)
 
 
 def ler_desconhecido(tipo: str, nome: str, dados: bytes, u=None) -> Lido:
@@ -593,12 +620,28 @@ def ler_desconhecido(tipo: str, nome: str, dados: bytes, u=None) -> Lido:
     else:
         avis = []
 
-    # 2) aprender
+    # 2) aprender (até 2 tentativas: a 2ª recebe o que a 1ª deixou de fora)
     if not escaneado and ia.chave():
         try:
-            rec = aprender_pdf(tipo, texto) if motor == "pdf" else aprender_tabela(tipo, linhas_tab)
-            lns, ext = _aplica(rec)
-            _valida(lns, tipo, ext.get("total"), texto_ref)
+            rec, lns, ext, erro, dica = None, [], {}, None, None
+            for tentativa in range(2):
+                if tentativa:
+                    dica = (f"A receita anterior {json.dumps({k: v for k, v in rec.items() if k != 'observacao'}, ensure_ascii=False)} "
+                            f"falhou: {erro}. Linhas com data que ficaram de fora:\n{_faltantes(rec, lns, texto_ref, motor)}\n"
+                            "Corrija a receita para cobrir essas linhas também.")
+                rec = aprender_pdf(tipo, texto, dica) if motor == "pdf" else aprender_tabela(tipo, linhas_tab, dica)
+                try:
+                    lns, ext = _aplica(rec)
+                except SemReceita as e2:          # nem aplicou (cabeçalho/regex inválidos)
+                    erro, lns, ext = e2, [], {}
+                    continue
+                try:
+                    _valida(lns, tipo, ext.get("total"), texto_ref)
+                    break
+                except SemReceita as e2:
+                    erro = e2
+            else:
+                raise SemReceita(str(erro))
             obs = rec.get("observacao")
             if obs:
                 avis.append(f"Observação da leitura: {obs}")
