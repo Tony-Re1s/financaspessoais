@@ -577,7 +577,7 @@ def guardar(tipo: str, imp: str, motor: str, rec: dict, u) -> None:
                    values (:t, :i, :b, :m, cast(:r as jsonb), :u)
                    on conflict (tipo, impressao) do update set receita = excluded.receita, banco = excluded.banco,
                        motor = excluded.motor, usos = leitores_aprendidos.usos + 1, ultimo_uso = now()""",
-                mudar=False, t=tipo, i=imp, b=rec.get("banco") or "Banco", m=motor,
+                t=tipo, i=imp, b=rec.get("banco") or "Banco", m=motor,
                 r=json.dumps(limpo, ensure_ascii=False), u=u["id"] if u else None)
 
 
