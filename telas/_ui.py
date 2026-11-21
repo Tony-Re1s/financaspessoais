@@ -140,6 +140,7 @@ BANCOS = [  # (trecho do nome/instituição, arquivo do logo, cor 1, cor 2)
     ("santander", "santander", "#B30000", "#E02424"), ("caixa", "caixa", "#004A8A", "#1F6FB8"),
     ("brasil card", "brasilcard", "#0B4F9C", "#2A73C4"), ("brasilcard", "brasilcard", "#0B4F9C", "#2A73C4"),
     ("neon", "neon", "#0A6ED1", "#2E95F5"), ("carrefour", "carrefour", "#1E4FA8", "#3D74D6"),
+    ("will", "will", "#8A6A00", "#B38A00"),
     ("brasil", "bb", "#0B2E8A", "#2D56C4"), ("btg", "btg", "#0B2D5B", "#2C5491"),
     ("xp", "xp", "#1A1A1A", "#444444"), ("sicoob", "sicoob", "#00756A", "#14998B"),
     ("sicredi", "sicredi", "#2F7A0C", "#4E9E24"),
