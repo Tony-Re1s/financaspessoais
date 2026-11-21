@@ -47,10 +47,22 @@ _n_var = db.um("""select count(*) as n from lancamentos where dono_id = :u and v
                     and data_vencimento >= current_date""", u=u["id"]) if ids else None
 com_var = False
 if _n_var and _n_var["n"]:
-    com_var = st.toggle("Incluir comissões e receitas variáveis previstas", key="painel_var",
+    com_var = st.toggle("Incluir comissões e receitas variáveis previstas (ex.: média de comissão)",
+                        key="painel_var",
                         help="Por padrão o fluxo usa só o que é fixo ou já recebido. Ligue para simular "
-                             "com as comissões que você previu.")
-s0, ext = saldos.extrato(u, ids, ini_w, fim_w, variaveis=com_var) if ids else (0.0, pd.DataFrame())
+                             "com as comissões que você previu. Quando a comissão cair de verdade, "
+                             "confirme o lançamento com o valor real e ela passa a contar sempre.")
+_n_atr = db.um("""select count(*) as n, coalesce(sum(valor), 0) as v from lancamentos
+                   where dono_id = :u and status = 'previsto' and tipo = 'despesa'
+                     and coalesce(data_pagamento, data_vencimento) < current_date""", u=u["id"]) if ids else None
+com_atr = False
+if _n_atr and _n_atr["n"]:
+    com_atr = st.toggle(f"Descontar os atrasados ({_n_atr['n']} · {brl(float(_n_atr['v']))}) a partir de amanhã",
+                        value=True, key="painel_atr",
+                        help="O que venceu e ainda não foi pago entra como saída amanhã, para a projeção mostrar "
+                             "como fica o saldo depois de quitar. Desligue para ver a projeção sem eles. "
+                             "Quando pagar, confirme o lançamento (ou mude a data para quando vai pagar).")
+s0, ext = saldos.extrato(u, ids, ini_w, fim_w, variaveis=com_var, atrasados=com_atr) if ids else (0.0, pd.DataFrame())
 
 if not ext.empty:
     ext = ext.copy()

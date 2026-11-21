@@ -205,14 +205,37 @@ def remover_saldo(conta_id, d: date):
     db.executar("delete from saldos where conta_id = :c and data = :d", c=conta_id, d=d)
 
 
-def extrato(u, conta_ids: list, ini: date, fim: date, variaveis: bool = False) -> tuple[float, pd.DataFrame]:
+def _jogar_atrasados(mov: pd.DataFrame, ini: date, fim: date) -> pd.DataFrame:
+    """Previstos já vencidos (não pagos) saem da data original e vão para AMANHÃ, como 'a pagar'.
+    O saldo de hoje continua igual ao do banco; a projeção desconta o que está em atraso.
+    (Na data original eles sumiriam no 'Ajuste' do saldo informado, já que o banco não os debitou.)"""
+    hj = hoje()
+    alvo = max(hj + timedelta(days=1), ini)
+    if mov.empty or alvo > fim:
+        return mov
+    venc = (mov["status"] == "previsto") & (mov["data"] < hj)
+    if not venc.any():
+        return mov
+    atras = mov[venc].copy()
+    atras["descricao"] = "Atrasado · " + atras["descricao"].astype(str) + " (venc. " + \
+        atras["data"].map(lambda d: f"{d:%d/%m}") + ")"
+    atras["data"] = alvo
+    atras["atrasado"] = True
+    return pd.concat([mov[~venc].assign(atrasado=False), atras], ignore_index=True)
+
+
+def extrato(u, conta_ids: list, ini: date, fim: date, variaveis: bool = False,
+            atrasados: bool = False) -> tuple[float, pd.DataFrame]:
     """(saldo no dia anterior a ini, linhas com saldo acumulado). Saldos informados no meio do período
-    entram como 'Ajuste' para o acumulado bater com o banco. variaveis=True inclui comissões previstas."""
+    entram como 'Ajuste' para o acumulado bater com o banco. variaveis=True inclui comissões previstas.
+    atrasados=True: o que venceu e não foi pago entra amanhã (ver _jogar_atrasados)."""
     partes, inicial = [], 0.0
     for c in conta_ids:
         s0 = saldo_em(u, c, ini - timedelta(days=1))
         inicial += s0
         mov = movimentos(u, [c], ini, fim, variaveis=variaveis)
+        if atrasados:
+            mov = _jogar_atrasados(mov, ini, fim)
         anc = ancoras(c, u)
         anc = anc[(pd.to_datetime(anc["data"]).dt.date >= ini) & (pd.to_datetime(anc["data"]).dt.date <= fim)] \
             if not anc.empty else anc
@@ -221,8 +244,10 @@ def extrato(u, conta_ids: list, ini: date, fim: date, variaveis: bool = False) -
             dias = sorted(set(mov["data"]) | set(pd.to_datetime(anc["data"]).dt.date)) if not mov.empty else \
                 sorted(set(pd.to_datetime(anc["data"]).dt.date))
             mapa = dict(zip(pd.to_datetime(anc["data"]).dt.date, anc["valor"].astype(float)))
+            atr = mov["atrasado"].fillna(False).astype(bool) if "atrasado" in mov else \
+                pd.Series(False, index=mov.index)
             for d in dias:
-                dia = mov[mov["data"] == d] if not mov.empty else mov
+                dia = mov[(mov["data"] == d) & ~atr] if not mov.empty else mov
                 linhas.append(dia)
                 corrente += float(dia["valor"].sum()) if not dia.empty else 0.0
                 if d in mapa and abs(mapa[d] - corrente) > 0.004:
@@ -232,6 +257,10 @@ def extrato(u, conta_ids: list, ini: date, fim: date, variaveis: bool = False) -
                                                  "valor": round(mapa[d] - corrente, 2),
                                                  "status": "pago", "conta": c, "fonte": "ajuste"}]))
                     corrente = mapa[d]
+                extra = mov[(mov["data"] == d) & atr] if not mov.empty else mov
+                if not extra.empty:   # atrasado depois do saldo informado do dia: não vira 'Ajuste'
+                    linhas.append(extra)
+                    corrente += float(extra["valor"].sum())
             mov = pd.concat(linhas, ignore_index=True) if linhas else mov
         partes.append(mov)
     df = pd.concat(partes, ignore_index=True) if partes else pd.DataFrame()
