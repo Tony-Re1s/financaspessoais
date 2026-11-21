@@ -20,7 +20,7 @@ with st.expander("Bancos que o app já lê"):
                 "importação e passa a ler sozinho nas seguintes.")
 
 arqs = st.file_uploader("Arquivo da fatura — ou prints/fotos dela (pode ser mais de um)",
-                        type=["xlsx", "xls", "csv", "ofx", "pdf", "jpg", "jpeg", "png", "webp"],
+                        type=["xlsx", "xls", "csv", "ofx", "pdf", "jpg", "jpeg", "png", "webp", "heic"],
                         accept_multiple_files=True, key="up_fatura")
 if not arqs:
     st.stop()

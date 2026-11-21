@@ -21,7 +21,7 @@ with st.expander("Bancos que o app já lê"):
                 "importação e passa a ler sozinho nas seguintes.")
 
 arqs = st.file_uploader("Arquivo(s) do extrato — vários meses do mesmo banco, ou prints/fotos",
-                        type=["xls", "xlsx", "csv", "pdf", "jpg", "jpeg", "png", "webp"],
+                        type=["xls", "xlsx", "csv", "pdf", "jpg", "jpeg", "png", "webp", "heic"],
                         accept_multiple_files=True, key="up_extrato")
 if not arqs:
     st.stop()

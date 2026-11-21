@@ -42,7 +42,7 @@ class PdfComSenha(Exception):
     """PDF protegido: precisa da senha (ou a senha dada está errada)."""
 
 
-IMAGENS = ("jpg", "jpeg", "png", "webp")
+IMAGENS = ("jpg", "jpeg", "png", "webp", "heic", "heif")
 
 
 def pdf_protegido(dados: bytes) -> bool:
@@ -76,8 +76,13 @@ def abrir_pdf(dados: bytes, senha: str | None) -> bytes:
 
 
 def _imagem_jpeg(dados: bytes, max_lado=1800) -> bytes:
-    """Print/foto → JPEG de tamanho razoável para a IA (HEIC não é suportado)."""
+    """Print/foto (inclusive HEIC do iPhone) → JPEG de tamanho razoável para a IA."""
     from PIL import Image, ImageOps
+    try:
+        from pillow_heif import register_heif_opener
+        register_heif_opener()
+    except Exception:  # noqa: BLE001
+        pass
     im = Image.open(io.BytesIO(dados))
     im = ImageOps.exif_transpose(im).convert("RGB")
     if max(im.size) > max_lado:
