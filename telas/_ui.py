@@ -133,11 +133,13 @@ BANCOS = [  # (trecho do nome/instituição, arquivo do logo, cor 1, cor 2)
     ("ultravioleta", "nubank", "#1E0636", "#4A1782"), ("nubank black", "nubank", "#1E0636", "#4A1782"),
     ("latam", "itau", "#B3123F", "#E0245E"), ("uniclass", "itau", "#17213F", "#34416B"),
     ("visa infinity", "itau", "#17213F", "#34416B"), ("personnalite", "itau", "#17213F", "#34416B"),
-    ("itau", "itau", "#C25700", "#E57A12"), ("nubank", "nubank", "#6A0BB0", "#9A3EE0"),
+    ("samsung", "itau", "#1428A0", "#3A4FC4"), ("itau", "itau", "#C25700", "#E57A12"), ("nubank", "nubank", "#6A0BB0", "#9A3EE0"),
     ("nu pag", "nubank", "#6A0BB0", "#9A3EE0"), ("inter", "inter", "#A8400A", "#D2600F"),
     ("mercado pago", "mercadopago", "#00609F", "#0A86D1"), ("picpay", "picpay", "#0B7A43", "#14A35C"),
     ("c6", "c6", "#1E1E1E", "#454545"), ("bradesco", "bradesco", "#A30A28", "#CC2A47"),
     ("santander", "santander", "#B30000", "#E02424"), ("caixa", "caixa", "#004A8A", "#1F6FB8"),
+    ("brasil card", "brasilcard", "#0B4F9C", "#2A73C4"), ("brasilcard", "brasilcard", "#0B4F9C", "#2A73C4"),
+    ("neon", "neon", "#0A6ED1", "#2E95F5"), ("carrefour", "carrefour", "#1E4FA8", "#3D74D6"),
     ("brasil", "bb", "#0B2E8A", "#2D56C4"), ("btg", "btg", "#0B2D5B", "#2C5491"),
     ("xp", "xp", "#1A1A1A", "#444444"), ("sicoob", "sicoob", "#00756A", "#14998B"),
     ("sicredi", "sicredi", "#2F7A0C", "#4E9E24"),
@@ -182,6 +184,7 @@ BANDEIRAS = [  # (trecho do nome/instituição, arquivo) — a 1ª que bater val
     ("visa", "visa"), ("master", "mastercard"), ("elo", "elo"), ("amex", "amex"), ("american express", "amex"),
     ("hipercard", "hipercard"), ("latam", "mastercard"), ("nubank", "mastercard"), ("picpay", "mastercard"),
     ("inter", "mastercard"), ("c6", "mastercard"), ("mercado pago", "visa"), ("xp", "visa"),
+    ("carrefour", "mastercard"), ("neon", "visa"), ("samsung", "visa"),
 ]
 
 
