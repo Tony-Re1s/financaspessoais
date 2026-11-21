@@ -20,16 +20,38 @@ with st.expander("Bancos que o app já lê"):
     st.markdown("- **Qualquer outro banco** (.csv, .xls, .xlsx, .pdf): o app aprende o formato na primeira "
                 "importação e passa a ler sozinho nas seguintes.")
 
-arqs = st.file_uploader("Arquivo(s) do extrato — pode subir vários meses do mesmo banco",
-                        type=["xls", "xlsx", "csv", "pdf"], accept_multiple_files=True, key="up_extrato")
+arqs = st.file_uploader("Arquivo(s) do extrato — vários meses do mesmo banco, ou prints/fotos",
+                        type=["xls", "xlsx", "csv", "pdf", "jpg", "jpeg", "png", "webp"],
+                        accept_multiple_files=True, key="up_extrato")
 if not arqs:
     st.stop()
-# lido uma vez por sessão (formato novo pode chamar a IA; não repetir a cada clique)
-_k = "ext_lido_" + hashlib.sha1(b"".join(a.getvalue() for a in arqs)).hexdigest()[:16]
+_imgs = [a for a in arqs if a.name.lower().rsplit(".", 1)[-1] in leitores.IMAGENS]
+if _imgs and len(_imgs) != len(arqs):
+    st.warning("Misturou imagem com arquivo: suba só os prints, ou só os arquivos do extrato.")
+    st.stop()
+
+# PDF protegido: pede a senha (fica só na memória desta sessão)
+senha = None
+_prot = [a for a in arqs if a.name.lower().endswith(".pdf") and leitores.pdf_protegido(a.getvalue())]
+if _prot:
+    senha = st.text_input("Senha do PDF", type="password", key="senha_" + _prot[0].name,
+                          help="Normalmente parte do CPF ou a data de nascimento, como o banco indica no e-mail.")
+    if not senha:
+        st.info("PDF protegido. Digite a senha para continuar.", icon=":material/lock:")
+        st.stop()
+
+# lido uma vez por sessão (formato novo/imagem chama a IA; não repetir a cada clique)
+_k = "ext_lido_" + hashlib.sha1(b"".join(a.getvalue() for a in arqs) + (senha or "").encode()).hexdigest()[:16]
 if _k not in st.session_state:
     try:
-        with st.spinner("Lendo o extrato…"):
-            st.session_state[_k] = extratos.ler([(a.name, a.getvalue()) for a in arqs], u)
+        with st.spinner("Lendo o extrato…" if not _imgs else f"Lendo {len(_imgs)} imagem(ns) com a IA…"):
+            if _imgs:
+                st.session_state[_k] = extratos.ler_imagens([(a.name, a.getvalue()) for a in arqs], u)
+            else:
+                st.session_state[_k] = extratos.ler([(a.name, a.getvalue()) for a in arqs], u, senha=senha)
+    except leitores.PdfComSenha as e:
+        st.error(str(e))
+        st.stop()
     except extratos.FormatoDesconhecido as e:
         st.warning(f"Não consegui ler **{e}**.")
         st.stop()

@@ -38,6 +38,69 @@ class SemReceita(Exception):
     """Não deu para aprender uma receita confiável (a IA direta é a saída)."""
 
 
+class PdfComSenha(Exception):
+    """PDF protegido: precisa da senha (ou a senha dada está errada)."""
+
+
+IMAGENS = ("jpg", "jpeg", "png", "webp")
+
+
+def pdf_protegido(dados: bytes) -> bool:
+    from pypdf import PdfReader
+    try:
+        return bool(PdfReader(io.BytesIO(dados)).is_encrypted)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def abrir_pdf(dados: bytes, senha: str | None) -> bytes:
+    """Devolve o PDF sem senha (para pdfplumber/pdfium). A senha fica só na memória."""
+    from pypdf import PdfReader, PdfWriter
+    r = PdfReader(io.BytesIO(dados))
+    if not r.is_encrypted:
+        return dados
+    if not senha:
+        raise PdfComSenha("Este PDF tem senha.")
+    try:
+        ok = r.decrypt(senha.strip())
+    except Exception as e:  # noqa: BLE001 — algoritmo não suportado etc.
+        raise PdfComSenha(f"Não consegui abrir o PDF com essa senha ({e}).") from e
+    if not ok:
+        raise PdfComSenha("Senha do PDF incorreta.")
+    w = PdfWriter()
+    for pg in r.pages:
+        w.add_page(pg)
+    buf = io.BytesIO()
+    w.write(buf)
+    return buf.getvalue()
+
+
+def _imagem_jpeg(dados: bytes, max_lado=1800) -> bytes:
+    """Print/foto → JPEG de tamanho razoável para a IA (HEIC não é suportado)."""
+    from PIL import Image, ImageOps
+    im = Image.open(io.BytesIO(dados))
+    im = ImageOps.exif_transpose(im).convert("RGB")
+    if max(im.size) > max_lado:
+        im.thumbnail((max_lado, max_lado))
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=85)
+    return buf.getvalue()
+
+
+def ler_imagens(tipo: str, arquivos: list[tuple[str, bytes]]) -> "Lido":
+    """Prints/fotos de fatura ou extrato (um ou vários): a IA lê direto, sem regra."""
+    if not ia.chave():
+        raise ValueError("Ler imagem precisa da IA configurada ([anthropic] api_key nos Secrets).")
+    d = ler_direto(tipo, imagens=[_imagem_jpeg(b) for _, b in arquivos])
+    ext = {}
+    for k in ("vencimento", "final", "total", "conta"):
+        if d.get(k):
+            ext[k] = date.fromisoformat(str(d[k])[:10]) if k == "vencimento" and len(str(d[k])) >= 10 else d[k]
+    n = len(arquivos)
+    return Lido(d.get("banco") or "Banco", "ia", _linhas_direto(d), ext, motor="ia",
+                avisos=[f"Lido de {n} imagem{'ns' if n > 1 else ''} pela IA: confira valores e total antes de gravar."])
+
+
 # ---------------------------------------------------------------------------
 # Impressão digital e matéria-prima
 # ---------------------------------------------------------------------------
@@ -584,11 +647,15 @@ def _faltantes(rec: dict, linhas: list[dict], texto_ref: str, motor: str, n=12) 
     return "\n".join(fora)
 
 
-def ler_desconhecido(tipo: str, nome: str, dados: bytes, u=None) -> Lido:
+def ler_desconhecido(tipo: str, nome: str, dados: bytes, u=None, senha: str | None = None) -> Lido:
     """1) receita guardada → 2) aprender com a IA e validar → 3) IA lê direto."""
     e = _ext(nome)
+    if e in IMAGENS:
+        return ler_imagens(tipo, [(nome, dados)])
     if e not in ("csv", "txt", "xls", "xlsx", "xlsm", "pdf"):
         raise ValueError(f"Não sei ler .{e}")
+    if e == "pdf":
+        dados = abrir_pdf(dados, senha)          # PdfComSenha se precisar
     texto = texto_pdf(dados) if e == "pdf" else None
     escaneado = e == "pdf" and len((texto or "").strip()) < 80
     linhas_tab = None if e == "pdf" else tabela_bruta(nome, dados)

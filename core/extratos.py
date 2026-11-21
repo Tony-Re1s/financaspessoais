@@ -132,12 +132,7 @@ class FormatoDesconhecido(Exception):
     pass
 
 
-def _ler_desconhecido(nome: str, dados: bytes, u) -> Extrato:
-    from core import leitores
-    try:
-        ld = leitores.ler_desconhecido("extrato", nome, dados, u)
-    except ValueError as e:
-        raise FormatoDesconhecido(f"{nome}: {e}") from e
+def _de_lido(ld) -> Extrato:
     linhas = [Linha(d["data"], re.sub(r"\s{2,}", " ", d["descricao"]), d["valor"], d.get("ident")) for d in ld.linhas]
     saldos = sorted({d["data"]: float(d["saldo"]) for d in ld.linhas if d.get("saldo") is not None}.items())
     ex = Extrato(ld.banco, ld.formato, linhas, saldos, conta_banco=ld.extras.get("conta"),
@@ -151,10 +146,27 @@ def _ler_desconhecido(nome: str, dados: bytes, u) -> Extrato:
     return ex
 
 
-def ler(arquivos: list[tuple[str, bytes]], u=None) -> Extrato:
-    """Um ou mais arquivos do MESMO banco/conta (ex.: Nubank set + out)."""
+def _ler_desconhecido(nome: str, dados: bytes, u) -> Extrato:
+    from core import leitores
+    try:
+        return _de_lido(leitores.ler_desconhecido("extrato", nome, dados, u))
+    except ValueError as e:
+        raise FormatoDesconhecido(f"{nome}: {e}") from e
+
+
+def ler_imagens(arquivos: list[tuple[str, bytes]], u=None) -> Extrato:
+    """Prints/fotos do extrato (um ou vários) lidos pela IA."""
+    from core import leitores
+    return _de_lido(leitores.ler_imagens("extrato", arquivos))
+
+
+def ler(arquivos: list[tuple[str, bytes]], u=None, senha: str | None = None) -> Extrato:
+    """Um ou mais arquivos do MESMO banco/conta (ex.: Nubank set + out). PDF com senha → leitores.PdfComSenha."""
+    from core import leitores
     exs = []
     for nome, dados in arquivos:
+        if nome.lower().endswith(".pdf") and leitores.pdf_protegido(dados):
+            dados = leitores.abrir_pdf(dados, senha)
         for _, detecta, leitor in LEITORES:
             if detecta(nome, dados):
                 exs.append(leitor(nome, dados))

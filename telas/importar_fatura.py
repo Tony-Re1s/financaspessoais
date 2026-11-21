@@ -19,16 +19,41 @@ with st.expander("Bancos que o app já lê"):
     st.markdown("- **Qualquer outro banco** (.csv, .xls, .xlsx, .pdf): o app aprende o formato na primeira "
                 "importação e passa a ler sozinho nas seguintes.")
 
-arq = st.file_uploader("Arquivo da fatura", type=["xlsx", "xls", "csv", "ofx", "pdf"], key="up_fatura")
-if not arq:
+arqs = st.file_uploader("Arquivo da fatura — ou prints/fotos dela (pode ser mais de um)",
+                        type=["xlsx", "xls", "csv", "ofx", "pdf", "jpg", "jpeg", "png", "webp"],
+                        accept_multiple_files=True, key="up_fatura")
+if not arqs:
     st.stop()
+_imgs = [a for a in arqs if a.name.lower().rsplit(".", 1)[-1] in leitores.IMAGENS]
+if _imgs and len(_imgs) != len(arqs):
+    st.warning("Misturou imagem com arquivo: suba só os prints, ou só o arquivo da fatura.")
+    st.stop()
+if not _imgs and len(arqs) > 1:
+    st.warning("Uma fatura por vez (vários arquivos só para prints/fotos da mesma fatura).")
+    st.stop()
+arq = arqs[0]
 
-# o arquivo é lido uma vez por sessão (formato novo pode chamar a IA; não repetir a cada clique)
-_k = "fat_lida_" + hashlib.sha1(arq.getvalue()).hexdigest()[:16]
+# PDF protegido: pede a senha (fica só na memória desta sessão)
+senha = None
+if not _imgs and arq.name.lower().endswith(".pdf") and leitores.pdf_protegido(arq.getvalue()):
+    senha = st.text_input("Senha do PDF", type="password", key=f"senha_{arq.name}",
+                          help="Normalmente parte do CPF ou a data de nascimento, como o banco indica no e-mail.")
+    if not senha:
+        st.info("Este PDF está protegido. Digite a senha para continuar.", icon=":material/lock:")
+        st.stop()
+
+# o arquivo é lido uma vez por sessão (formato novo/imagem chama a IA; não repetir a cada clique)
+_k = "fat_lida_" + hashlib.sha1(b"".join(a.getvalue() for a in arqs) + (senha or "").encode()).hexdigest()[:16]
 if _k not in st.session_state:
     try:
-        with st.spinner("Lendo a fatura…"):
-            st.session_state[_k] = faturas.ler(arq.name, arq.getvalue(), u)
+        with st.spinner("Lendo a fatura…" if not _imgs else f"Lendo {len(_imgs)} imagem(ns) com a IA…"):
+            if _imgs:
+                st.session_state[_k] = faturas.ler_imagens([(a.name, a.getvalue()) for a in arqs], u)
+            else:
+                st.session_state[_k] = faturas.ler(arq.name, arq.getvalue(), u, senha=senha)
+    except leitores.PdfComSenha as e:
+        st.error(str(e))
+        st.stop()
     except faturas.FormatoDesconhecido as e:
         st.warning(f"Não consegui ler este arquivo ({e}).", icon=":material/help:")
         st.stop()
@@ -154,7 +179,7 @@ if futuras:
 
 if st.button("Importar", type="primary", icon=":material/download_done:", use_container_width=True,
              disabled=escolhidas.empty and not futuras and ja.empty):
-    r = faturas.gravar(u, conta_id, fat, vencimento, escolhidas, futuras, arq.name,
+    r = faturas.gravar(u, conta_id, fat, vencimento, escolhidas, futuras, ", ".join(a.name for a in arqs),
                        vincular=regs[regs["situacao"] == "ja_lancada"])
     if fat.receita_nova and fat.impressao:
         try:

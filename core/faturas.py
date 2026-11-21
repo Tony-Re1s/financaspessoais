@@ -218,8 +218,32 @@ LEITORES = [
 ]
 
 
-def ler(nome: str, dados: bytes, u=None, aprender: bool = True) -> Fatura:
-    """Leitores fixos primeiro; formato novo → core/leitores (receita guardada, aprendizado ou IA)."""
+def _de_lido(ld) -> Fatura:
+    linhas = [Linha(data=d["data"], descricao=_limpa(d["descricao"]), valor=d["valor"], parcela_num=d["parcela_num"],
+                    parcela_total=d["parcela_total"], titular=d["titular"], portador=d.get("portador"),
+                    final=d.get("final")) for d in ld.linhas]
+    ex = ld.extras
+    fat = Fatura(ld.banco, ld.formato, linhas, vencimento=ex.get("vencimento"), final=ex.get("final"),
+                 total_banco=ex.get("total"), avisos=list(ld.avisos), receita_nova=ld.receita_nova,
+                 impressao=ld.impressao, motor=ld.motor)
+    if fat.receita_nova:
+        fat.avisos.insert(0, f"Formato novo ({fat.banco}): aprendi a ler este arquivo. Confira o total; ao gravar, "
+                             "o formato fica salvo e as próximas importações dele entram direto.")
+    return fat
+
+
+def ler_imagens(arquivos: list[tuple[str, bytes]], u=None) -> Fatura:
+    """Prints/fotos da fatura (um ou vários) lidos pela IA."""
+    from core import leitores
+    return _de_lido(leitores.ler_imagens("fatura", arquivos))
+
+
+def ler(nome: str, dados: bytes, u=None, aprender: bool = True, senha: str | None = None) -> Fatura:
+    """Leitores fixos primeiro; formato novo → core/leitores (receita guardada, aprendizado ou IA).
+    PDF com senha: levanta leitores.PdfComSenha até vir a senha certa."""
+    from core import leitores
+    if nome.lower().endswith(".pdf") and leitores.pdf_protegido(dados):
+        dados = leitores.abrir_pdf(dados, senha)
     for _, detecta, leitor in LEITORES:
         try:
             if detecta(nome, dados):
@@ -234,22 +258,10 @@ def ler(nome: str, dados: bytes, u=None, aprender: bool = True) -> Fatura:
             pass
     if not aprender:
         raise FormatoDesconhecido(nome)
-    from core import leitores
     try:
-        ld = leitores.ler_desconhecido("fatura", nome, dados, u)
+        return _de_lido(leitores.ler_desconhecido("fatura", nome, dados, u))
     except ValueError as e:
         raise FormatoDesconhecido(f"{nome}: {e}") from e
-    linhas = [Linha(data=d["data"], descricao=_limpa(d["descricao"]), valor=d["valor"], parcela_num=d["parcela_num"],
-                    parcela_total=d["parcela_total"], titular=d["titular"], portador=d.get("portador"),
-                    final=d.get("final")) for d in ld.linhas]
-    ex = ld.extras
-    fat = Fatura(ld.banco, ld.formato, linhas, vencimento=ex.get("vencimento"), final=ex.get("final"),
-                 total_banco=ex.get("total"), avisos=list(ld.avisos), receita_nova=ld.receita_nova,
-                 impressao=ld.impressao, motor=ld.motor)
-    if fat.receita_nova:
-        fat.avisos.insert(0, f"Formato novo ({fat.banco}): aprendi a ler este arquivo. Confira o total; ao gravar, "
-                             "o formato fica salvo e as próximas importações dele entram direto.")
-    return fat
 
 
 class FormatoDesconhecido(Exception):
