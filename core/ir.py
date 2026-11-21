@@ -127,7 +127,8 @@ def _ler_layout(nome: str, dados: bytes) -> dict:
     import pdfplumber
     with pdfplumber.open(io.BytesIO(dados)) as pdf:
         pg = pdf.pages[0]
-        palavras = pg.extract_words()
+        # só texto na horizontal (a margem do recibo tem "Declaro ter recebido…" escrito em pé)
+        palavras = [w for w in pg.extract_words() if w.get("upright", True)]
         texto = pg.extract_text() or ""
     # agrupa por linha com tolerância (código e descrição às vezes saem 1pt desalinhados)
     linhas: dict[float, list] = {}
