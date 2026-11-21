@@ -59,12 +59,13 @@ def _faturas(u, conta_ids: list) -> pd.DataFrame:
                            if pd.notna(r.dia_vencimento) else r.venc), axis=1)
     return pd.DataFrame({"id": None, "data": df["data"], "descricao": "Fatura " + df["cartao"],
                          "categoria": "Cartão de crédito", "grupo": "Cartão de crédito", "nao_contar": False,
+                         "variavel": False,
                          "valor": -df["total"].astype(float),
                          "status": df["paga"].map({True: "pago", False: "previsto"}), "conta": df["conta"],
                          "fonte": "fatura"})
 
 
-_VAZIO = ["id", "data", "descricao", "categoria", "grupo", "nao_contar", "valor", "status", "conta", "fonte"]
+_VAZIO = ["id", "data", "descricao", "categoria", "grupo", "nao_contar", "variavel", "valor", "status", "conta", "fonte"]
 
 
 def _contas_caixa_ids(u) -> list:
@@ -72,9 +73,11 @@ def _contas_caixa_ids(u) -> list:
     return list(df["id"]) if not df.empty else []
 
 
-def movimentos(u, conta_ids: list, ini: date | None = None, fim: date | None = None) -> pd.DataFrame:
+def movimentos(u, conta_ids: list, ini: date | None = None, fim: date | None = None,
+               variaveis: bool = False) -> pd.DataFrame:
     """Movimentos das contas pedidas. Por baixo, busca de uma vez os de TODAS as contas de caixa do usuário
-    (uma consulta, guardada em cache) e filtra em memória — o painel chama isto dezenas de vezes."""
+    (uma consulta, guardada em cache) e filtra em memória — o painel chama isto dezenas de vezes.
+    variaveis=False (padrão): receita variável ainda prevista (comissão) fica de fora do saldo e do fluxo."""
     if not conta_ids:
         return pd.DataFrame(columns=_VAZIO)
     todas = _contas_caixa_ids(u)
@@ -86,6 +89,8 @@ def movimentos(u, conta_ids: list, ini: date | None = None, fim: date | None = N
         df = _movimentos_brutos(u, list(conta_ids))
     if df.empty:
         return df
+    if not variaveis and "variavel" in df:
+        df = df[~(df["variavel"].fillna(False).astype(bool) & (df["status"] == "previsto"))]
     if ini:
         df = df[df["data"] >= ini]
     if fim:
@@ -98,7 +103,7 @@ def _movimentos_brutos(u, conta_ids: list) -> pd.DataFrame:
     df = db.consultar("""
         select l.id, coalesce(l.data_pagamento, l.data_vencimento) as data, l.descricao,
                coalesce(cat.nome, '—') as categoria, coalesce(pai.nome, cat.nome, '—') as grupo,
-               l.nao_contar,
+               l.nao_contar, coalesce(l.variavel, false) as variavel,
                case when l.tipo = 'receita' then l.valor else -l.valor end as valor,
                l.status::text as status, coalesce(l.conta_id, cast(:p as uuid)) as conta,
                case when l.conta_id is null then 'sem_conta' else 'lancamento' end as fonte
@@ -110,7 +115,7 @@ def _movimentos_brutos(u, conta_ids: list) -> pd.DataFrame:
                     and coalesce(l.forma_pagamento, '') <> 'Cartao de Credito'))
         union all
         select l.id, coalesce(l.data_pagamento, l.data_vencimento), l.descricao, coalesce(cat.nome, '—'),
-               coalesce(pai.nome, cat.nome, '—'), false, l.valor, l.status::text, l.conta_destino_id, 'entrada_transf'
+               coalesce(pai.nome, cat.nome, '—'), false, false, l.valor, l.status::text, l.conta_destino_id, 'entrada_transf'
           from lancamentos l left join categorias cat on cat.id = l.categoria_id
           left join categorias pai on pai.id = cat.pai_id
          where l.dono_id = :u and l.status <> 'cancelado' and l.tipo = 'transferencia'
@@ -200,14 +205,14 @@ def remover_saldo(conta_id, d: date):
     db.executar("delete from saldos where conta_id = :c and data = :d", c=conta_id, d=d)
 
 
-def extrato(u, conta_ids: list, ini: date, fim: date) -> tuple[float, pd.DataFrame]:
+def extrato(u, conta_ids: list, ini: date, fim: date, variaveis: bool = False) -> tuple[float, pd.DataFrame]:
     """(saldo no dia anterior a ini, linhas com saldo acumulado). Saldos informados no meio do período
-    entram como 'Ajuste' para o acumulado bater com o banco."""
+    entram como 'Ajuste' para o acumulado bater com o banco. variaveis=True inclui comissões previstas."""
     partes, inicial = [], 0.0
     for c in conta_ids:
         s0 = saldo_em(u, c, ini - timedelta(days=1))
         inicial += s0
-        mov = movimentos(u, [c], ini, fim)
+        mov = movimentos(u, [c], ini, fim, variaveis=variaveis)
         anc = ancoras(c, u)
         anc = anc[(pd.to_datetime(anc["data"]).dt.date >= ini) & (pd.to_datetime(anc["data"]).dt.date <= fim)] \
             if not anc.empty else anc
@@ -223,6 +228,7 @@ def extrato(u, conta_ids: list, ini: date, fim: date) -> tuple[float, pd.DataFra
                 if d in mapa and abs(mapa[d] - corrente) > 0.004:
                     linhas.append(pd.DataFrame([{"id": None, "data": d, "descricao": "Ajuste (saldo informado)",
                                                  "categoria": "Ajuste", "grupo": "Ajuste", "nao_contar": False,
+                                                 "variavel": False,
                                                  "valor": round(mapa[d] - corrente, 2),
                                                  "status": "pago", "conta": c, "fonte": "ajuste"}]))
                     corrente = mapa[d]

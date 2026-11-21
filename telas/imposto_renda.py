@@ -20,7 +20,8 @@ MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "
 
 # --- subir holerites ------------------------------------------------------------------------------
 with st.expander("📄 Subir holerites (PDF)", expanded=not ir.anos(u)):
-    arqs = st.file_uploader("Holerites", type=["pdf"], accept_multiple_files=True, key="up_hol",
+    arqs = st.file_uploader("Holerites", type=["pdf", "jpg", "jpeg", "png", "heic"], accept_multiple_files=True,
+                            key="up_hol",
                             label_visibility="collapsed")
     if arqs:
         lidos, erros = [], []
@@ -34,10 +35,15 @@ with st.expander("📄 Subir holerites (PDF)", expanded=not ir.anos(u)):
         if lidos:
             lidos.sort(key=lambda h: (h["ano"], h["mes"]))
             st.caption(" · ".join(f"{MESES[h['mes'] - 1]}/{h['ano']} ({brl(h['liquido'])})" for h in lidos))
+            if any(h.get("lido_pela_ia") for h in lidos):
+                st.info("Algum holerite foi lido pela IA (layout novo) — confira os valores na tabela do ano.")
             if st.button(f"Salvar {len(lidos)} holerites", type="primary", icon=":material/save:"):
+                feito = []
                 for h in lidos:
                     ir.salvar(u, h)
-                st.session_state["_ui_ok"] = f"{len(lidos)} holerites salvos."
+                    feito += ir.efetivar(u, h)       # previstos do salário/comissão do mês viram recebidos
+                st.session_state["_ui_ok"] = f"{len(lidos)} holerites salvos." + (
+                    " Recebidos no fluxo: " + " · ".join(feito) if feito else "")
                 st.session_state.pop("up_hol", None)
                 st.rerun()
 
@@ -168,8 +174,14 @@ st.caption("Estimativa para planejar — confira com o informe de rendimentos.")
 st.markdown("<div class='ui-sec'>Salário no fluxo de caixa</div>", unsafe_allow_html=True)
 ult = hol.sort_values(["ano", "mes"]).iloc[-1]
 itens_ult = ult["itens"] if isinstance(ult["itens"], list) else __import__("json").loads(ult["itens"])
-adto = sum(float(i["valor"]) for i in itens_ult if i["classe"] == "pagamento" and "adiant" in _ui.sem_acento(i["descricao"]))
-liq = float(ult["liquido"] or 0)
+_fv = ir.fixo_variavel(itens_ult, float(ult["liquido"] or 0))
+_tem_var = _fv["variavel_bruto"] > 0
+# fluxo de caixa só com o fixo: comissão é variável e entra como previsão fora do fluxo
+adto = min(_fv["adiantamento"], _fv["fixo_liquido"])
+liq = round(_fv["fixo_liquido"] - adto, 2)
+_coms = [ir.fixo_variavel(x.itens, float(x.liquido or 0))["variavel_liquido"] for x in hol.itertuples()]
+_coms = [c for c in _coms if c > 0]
+com_media = round(sum(_coms) / len(_coms), 2) if _coms else 0.0
 sal_base = float(ult["salario_base"] or 0)
 e13 = ir.estimar_13(sal_base, float(pm.sort_values("mes").iloc[-1]["inss"]))
 recs = rec.listar(u)
@@ -180,6 +192,10 @@ princ = saldos.conta_principal(u)
 op_c = {r_.id: r_.nome for r_ in caixa.itertuples()}
 with st.container(border=True):
     st.markdown(f"Pelo holerite de **{MESES[int(ult['mes']) - 1]}/{int(ult['ano'])}**:")
+    if _tem_var:
+        st.caption(f"Recebido no mês: {brl(_fv['recebido'])} = **fixo {brl(_fv['fixo_liquido'])}** "
+                   f"(salário, auxílios e ajuda de custo, já sem INSS/IR) + **comissão {brl(_fv['variavel_liquido'])}**. "
+                   "O fluxo de caixa usa só o fixo; a comissão fica como previsão à parte.".replace("$", "\\$"))
     a1, a2 = st.columns(2)
     v_adto = a1.number_input("Adiantamento (R$)", 0.0, value=round(adto, 2), step=10.0, format="%.2f")
     d_adto = a2.number_input("Cai no dia", 1, 31, 10, key="d_adto")
@@ -189,9 +205,16 @@ with st.container(border=True):
     ids_c = list(op_c)
     conta = st.selectbox("Entra na conta", ids_c, format_func=op_c.get,
                          index=ids_c.index(next((i for i in ids_c if str(i) == str(princ)), ids_c[0])) if ids_c else None)
+    v_com = 0.0
+    if _tem_var or com_media:
+        c1_, c2_ = st.columns(2)
+        v_com = c1_.number_input("Previsão de comissão (fora do fluxo)", 0.0, value=com_media, step=50.0,
+                                 format="%.2f", help="Média líquida dos holerites. Fica só de referência: não entra no "
+                                 "saldo. Quando cair, ajuste o valor e marque como recebida — ou suba o holerite.")
+        c2_.caption(f"Cai junto com a 2ª parte (dia {int(d_liq)}). Pode ligar no Fluxo de caixa para simular.")
     com13 = st.checkbox(f"Prever também o 13º: 1ª parcela {brl(e13['p1'])} em 30/11 e 2ª parcela "
                         f"{brl(e13['p2'])} em 18/12 (estimativa, já sem INSS e IR)".replace("$", "\\$"), value=True)
-    nomes = ["salário · adiantamento", "salário · 2ª parte"]
+    nomes = [n.lower() for n in ir.NOMES_SALARIO]
     from core import db as _db
     tem13 = _db.consultar("""select descricao, valor, data_vencimento from lancamentos
                               where dono_id = :u and descricao ilike '13%% sal%%' and extract(year from data_vencimento) = :a
@@ -223,12 +246,17 @@ with st.container(border=True):
         cat = next((c.id for c in cats.itertuples() if _ui.sem_acento(c.nome) == "salario"), None)
         inicio = date(hoje().year, hoje().month, 1)
         prox = date(inicio.year + (inicio.month == 12), inicio.month % 12 + 1, 1)
-        for desc, v, dia in [("Salário · adiantamento", v_adto, d_adto), ("Salário · 2ª parte", v_liq, d_liq)]:
+        itens_rec = [(ir.NOMES_SALARIO[0], v_adto, d_adto, False), (ir.NOMES_SALARIO[1], v_liq, d_liq, False)]
+        if v_com > 0:
+            itens_rec.append((ir.NOME_COMISSAO, v_com, d_liq, True))
+        for desc, v, dia, var in itens_rec:
+            if v <= 0:
+                continue
             # começa no mês que vem se o dia deste mês já passou (já entrou pelo extrato)
             rec.salvar(u, dict(descricao=desc, valor=v, conta_id=conta, categoria_id=cat, tipo="receita",
                                frequencia="mensal", dia_vencimento=int(dia),
                                inicio=inicio if hoje().day < dia else prox, fim=None, visibilidade=None,
-                               ativa=True, forma_pagamento="Transferencia"))
+                               ativa=True, forma_pagamento="Transferencia", variavel=var))
         if com13 and tem13.empty:
             cat13 = next((c.id for c in cats.itertuples() if "13" in c.nome), cat)
             repo.inserir_lancamentos(u, [

@@ -4,7 +4,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from core import cartoes, cascata, repo, saldos
+from core import db, cartoes, cascata, repo, saldos
 from core.fmt import brl, dia_no_mes, hoje, mes_label, mes_ref, somar_meses
 from telas import _ui
 from telas._comum import cartoes_kpi, e_celular, seletor_escopo, usuario
@@ -43,7 +43,14 @@ contas = repo.contas(u)
 caixa = contas[contas["tipo"].isin(saldos.TIPOS_CAIXA)]
 ids = list(caixa["id"])
 ini_w, fim_w = _ini(meses[0]), _fim(meses[-1])
-s0, ext = saldos.extrato(u, ids, ini_w, fim_w) if ids else (0.0, pd.DataFrame())
+_n_var = db.um("""select count(*) as n from lancamentos where dono_id = :u and variavel and status = 'previsto'
+                    and data_vencimento >= current_date""", u=u["id"]) if ids else None
+com_var = False
+if _n_var and _n_var["n"]:
+    com_var = st.toggle("Incluir comissões e receitas variáveis previstas", key="painel_var",
+                        help="Por padrão o fluxo usa só o que é fixo ou já recebido. Ligue para simular "
+                             "com as comissões que você previu.")
+s0, ext = saldos.extrato(u, ids, ini_w, fim_w, variaveis=com_var) if ids else (0.0, pd.DataFrame())
 
 if not ext.empty:
     ext = ext.copy()

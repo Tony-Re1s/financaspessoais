@@ -90,7 +90,8 @@ def _cadastro(escolha):
         inicio=_v("inicio", date(hoje().year, hoje().month, 1)), tem_fim=_v("fim") is not None, fim=_v("fim", hoje()),
         categoria_id=a.get("categoria_id") if a.get("categoria_id") in op_cat else None,
         conta_id=a.get("conta_id") if a.get("conta_id") in op_contas else None,
-        vis=a.get("visibilidade") if a.get("visibilidade") in VISIBILIDADES else None))
+        vis=a.get("visibilidade") if a.get("visibilidade") in VISIBILIDADES else None,
+        variavel=bool(_v("variavel", False))))
     passos = ["O quê", "Quando", "Onde"]
     i = _ui.etapas(ch, passos)
 
@@ -99,6 +100,10 @@ def _cadastro(escolha):
                   format_func=lambda t: "💸 Despesa" if t == "despesa" else "💰 Receita (salário…)")
         _ui.campo(r, ch, "descricao", st.text_input, "Descrição", placeholder="Ex.: Condomínio")
         _ui.campo(r, ch, "valor", st.number_input, "Valor (R$)", 0.0, step=10.0, format="%.2f")
+        if r["tipo"] == "receita":
+            _ui.campo(r, ch, "variavel", st.toggle, "Variável (comissão, bônus…) — fora do fluxo até entrar",
+                      help="Os previstos ficam só de referência: não entram no saldo nem no Fluxo de caixa. "
+                           "Quando o valor entrar, ajuste e marque como pago.")
     elif i == 1:
         c1, c2 = st.columns(2)
         _ui.campo(r, ch, "dia", c1.number_input, "Dia", 1, 31,
@@ -122,7 +127,8 @@ def _cadastro(escolha):
             rec.salvar(u, dict(descricao=r["descricao"].strip(), valor=r["valor"], conta_id=r["conta_id"],
                                categoria_id=r["categoria_id"], tipo=r["tipo"] or "despesa", frequencia=r["freq"],
                                dia_vencimento=int(r["dia"]), inicio=r["inicio"],
-                               fim=r["fim"] if r["tem_fim"] else None, visibilidade=r["vis"], ativa=True), escolha)
+                               fim=r["fim"] if r["tem_fim"] else None, visibilidade=r["vis"], ativa=True,
+                               variavel=bool(r.get("variavel")) and (r["tipo"] == "receita")), escolha)
             _ui.rascunho_limpar(ch)
             st.session_state["_ok_rec"] = f"**{r['descricao'].strip()}** salva — lançamentos dos próximos 12 meses prontos."
             st.rerun()

@@ -101,6 +101,8 @@ df["parcela"] = df.apply(lambda r: f"{int(r.parcela_num)}/{int(r.parcela_total)}
 df["sit"] = df["status"].map({"previsto": "⏳", "pago": "✅"})
 if "nao_contar" in df:
     df.loc[df["nao_contar"].fillna(False).astype(bool), "sit"] = "↔︎"   # só passa pela conta, não conta
+if "variavel" in df:      # comissão prevista: só referência, fora do fluxo
+    df.loc[df["variavel"].fillna(False).astype(bool) & (df["status"] == "previsto"), "sit"] = "≈"
 
 desp = df.loc[df["tipo"] == "despesa", "valor"].sum()
 rec = df.loc[df["tipo"] == "receita", "valor"].sum()
@@ -317,6 +319,8 @@ def _lista_celular(dfp: pd.DataFrame, aba: str):
                                           r["parcela"]] if x)
             if bool(r.get("nao_contar")):
                 chip, cls = "Não conta", "mute"
+            elif bool(r.get("variavel")) and r["status"] == "previsto":
+                chip, cls = "Variável · fora do fluxo", "mute"
             with st.container(key=f"lrow_{aba}_{idx}"):
                 _ui.render(f"""<div class="ui-lrow"><div class="dia"><b>{d.day:02d}</b><span>{MESES_C[d.month - 1]}</span></div>
                     <div class="tx"><div class="t">{_ui.esc(r['descricao'])}</div><div class="s">{_ui.esc(sub)}</div></div>

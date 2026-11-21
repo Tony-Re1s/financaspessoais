@@ -20,7 +20,7 @@ def listar(u) -> pd.DataFrame:
     return db.consultar("""
         select r.id, r.descricao, r.valor, r.dia_vencimento, r.frequencia, r.inicio, r.fim, r.ativa,
                r.conta_id, c.nome as conta, c.tipo::text as conta_tipo, r.categoria_id, r.tipo::text as tipo,
-               r.forma_pagamento, r.visibilidade::text as visibilidade,
+               r.forma_pagamento, r.visibilidade::text as visibilidade, coalesce(r.variavel, false) as variavel,
                (select min(l.data_vencimento) from lancamentos l where l.recorrencia_id = r.id
                   and l.status = 'previsto' and l.data_vencimento >= current_date) as proxima
           from recorrencias r left join contas c on c.id = r.conta_id
@@ -29,7 +29,8 @@ def listar(u) -> pd.DataFrame:
 
 def salvar(u, d: dict, rec_id=None):
     p = {k: d.get(k) for k in ["conta_id", "categoria_id", "tipo", "descricao", "valor", "frequencia",
-                               "dia_vencimento", "inicio", "fim", "forma_pagamento", "visibilidade", "ativa"]}
+                               "dia_vencimento", "inicio", "fim", "forma_pagamento", "visibilidade", "ativa",
+                               "variavel"]}
     p |= {"u": u["id"], "id": rec_id, "tipo": p["tipo"] or "despesa", "frequencia": p["frequencia"] or "mensal"}
     with db.transacao() as s:
         if rec_id:
@@ -37,21 +38,22 @@ def salvar(u, d: dict, rec_id=None):
                                 tipo=cast(:tipo as tipo_lancamento), descricao=:descricao, valor=:valor,
                                 frequencia=:frequencia, dia_vencimento=:dia_vencimento, inicio=:inicio, fim=:fim,
                                 forma_pagamento=:forma_pagamento, visibilidade=cast(:visibilidade as visibilidade),
-                                ativa=coalesce(:ativa, true)
+                                ativa=coalesce(:ativa, true), variavel=coalesce(:variavel, false)
                               where id=:id and dono_id=:u"""), p)
             _limpar_futuro(s, u, rec_id, so_gerados=True)
             # os que vieram de fora (planilha) e foram ligados: acompanham valor/categoria/conta
-            s.execute(text("""update lancamentos set valor=:valor, categoria_id=:categoria_id, conta_id=:conta_id
+            s.execute(text("""update lancamentos set valor=:valor, categoria_id=:categoria_id, conta_id=:conta_id,
+                                      variavel=coalesce(:variavel, false)
                                where recorrencia_id=:id and dono_id=:u and status='previsto'
                                  and data_vencimento >= :hoje"""), p | {"hoje": hoje()})
         else:
             rec_id = s.execute(text("""insert into recorrencias (dono_id, conta_id, categoria_id, tipo, descricao,
                                          valor, frequencia, dia_vencimento, inicio, fim, forma_pagamento,
-                                         visibilidade, ativa)
+                                         visibilidade, ativa, variavel)
                                        values (:u, :conta_id, :categoria_id, cast(:tipo as tipo_lancamento),
                                          :descricao, :valor, :frequencia, :dia_vencimento, :inicio, :fim,
                                          :forma_pagamento, cast(:visibilidade as visibilidade),
-                                         coalesce(:ativa, true))
+                                         coalesce(:ativa, true), coalesce(:variavel, false))
                                        returning id"""), p).scalar()
     if p.get("ativa") is False:
         encerrar(u, rec_id, desativar=False)
@@ -133,13 +135,13 @@ def gerar(u, rec_id=None) -> int:
                 s.execute(text("""
                     insert into lancamentos (dono_id, conta_id, categoria_id, tipo, descricao, valor, data_compra,
                         data_vencimento, forma_pagamento, status, visibilidade, origem, recorrencia_id,
-                        chave_importacao)
+                        chave_importacao, variavel)
                     values (:u, :c, :cat, cast(:tipo as tipo_lancamento), :d, :v, :dc, :dv, :f, 'previsto',
-                        cast(:vis as visibilidade), 'recorrencia', :rid, :k)
+                        cast(:vis as visibilidade), 'recorrencia', :rid, :k, :var)
                     on conflict do nothing"""),
                     {"u": u["id"], "c": r["conta_id"], "cat": r["categoria_id"], "tipo": r["tipo"],
                      "d": r["descricao"], "v": r["valor"], "dc": cobranca, "dv": venc, "f": forma,
-                     "vis": r["visibilidade"], "rid": r["id"], "k": k})
+                     "vis": r["visibilidade"], "rid": r["id"], "k": k, "var": bool(r.get("variavel"))})
                 n += 1
     return n
 

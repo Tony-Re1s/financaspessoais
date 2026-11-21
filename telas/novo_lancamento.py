@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 
 from core import repo
-from core.fmt import brl, hoje, vencimento_fatura
+from core.fmt import brl, hoje, vencimento_fatura, add_meses
 from core.padroes import FORMAS_PAGAMENTO, TIPOS_CONTA, VISIBILIDADES
 from telas import _ui
 from telas._comum import col_rs, em_reais, opcoes_categoria, usuario
@@ -26,6 +26,15 @@ c1, c2 = st.columns([2, 1])
 valor = c1.number_input("Valor (R$)", min_value=0.0, step=10.0, format="%.2f", key="f_valor")
 total_parc = c2.number_input("Parcelas", 1, 120, 1, key="f_ptot")
 descricao = st.text_input("Descrição", placeholder="Ex.: Mercado, Aluguel, Salário", key="f_desc")
+variavel, repetir = False, 1
+if tipo == "receita":
+    variavel = st.toggle("Receita variável (comissão, bônus…)", key="f_var",
+                         help="Fica FORA do saldo e do Fluxo de caixa enquanto for previsão — só para você ter a "
+                              "referência. Quando entrar de verdade, abra o lançamento, ajuste o valor e marque "
+                              "'Já foi pago'.")
+    if variavel:
+        repetir = int(st.number_input("Repetir a previsão por quantos meses", 1, 24, 1, key="f_rep",
+                                      help="Cria a mesma previsão nos meses seguintes, no mesmo dia."))
 
 c1, c2 = st.columns(2)
 op_cat = opcoes_categoria(cats, tipo)
@@ -79,8 +88,14 @@ with st.expander("Mais opções"):
 
 dados = dict(conta_id=conta_id, categoria_id=categoria_id, tipo=tipo, descricao=descricao.strip(),
              valor=valor, data_compra=data_compra, data_vencimento=data_venc, forma_pagamento=forma,
-             status=status, visibilidade=visibilidade, observacao=observacao or None, origem="manual")
-linhas = repo.plano_parcelas(dados, int(inicial), int(total_parc), valor_e_total)
+             status=status, visibilidade=visibilidade, observacao=observacao or None, origem="manual",
+             variavel=variavel)
+if variavel:          # previsão que se repete todo mês (não é parcela)
+    linhas = [dados | {"data_vencimento": add_meses(data_venc, k), "data_compra": add_meses(data_compra, k),
+                       "status": status if k == 0 else "previsto",
+                       "parcela_num": None, "parcela_total": None, "grupo_parcela": None} for k in range(repetir)]
+else:
+    linhas = repo.plano_parcelas(dados, int(inicial), int(total_parc), valor_e_total)
 
 # resumo do que vai ser gravado (mostra os padrões que ficaram recolhidos)
 resumo = [f"Vence **{data_venc:%d/%m/%Y}**", forma.replace("Cartao de Credito", "cartão"),
@@ -110,6 +125,6 @@ if st.button("Salvar", type="primary", icon=":material/save:", disabled=bool(fal
     n = repo.inserir_lancamentos(u, linhas)
     st.session_state["_ok_lanc"] = (f"{n} parcelas lançadas." if n > 1 else "Lançamento salvo.") + \
         f" {descricao} · {brl(sum(l['valor'] for l in linhas))}" + _dd.aviso_lancamento(descricao, categoria_id)
-    for k in ("f_desc", "f_valor", "f_ptot", "f_pini", "f_obs", "f_cat"):
+    for k in ("f_desc", "f_valor", "f_ptot", "f_pini", "f_obs", "f_cat", "f_var", "f_rep"):
         st.session_state.pop(k, None)
     st.rerun()

@@ -685,6 +685,12 @@ def form_lancamento(u, lanc_id, faturas: list[tuple[str, date]] | None = None):
     nao_contar = st.toggle("Não contar (só passa pela conta)", value=bool(l.get("nao_contar")),
                            help="Mexe no saldo da conta, mas fica fora do Início, do Fluxo de caixa, do orçamento "
                                 "e do IR. Ex.: dinheiro de outra pessoa que só passa por você.")
+    variavel = bool(l.get("variavel"))
+    if tipo == "receita":
+        variavel = st.toggle("Receita variável (comissão, bônus…)", value=variavel,
+                             help="Enquanto estiver prevista, fica FORA do saldo e do Fluxo de caixa — serve só de "
+                                  "referência. Quando o dinheiro entrar, ajuste o valor e marque 'Já foi pago': "
+                                  "aí passa a contar normalmente.")
     if faturas and conta == l["conta_id"]:            # cartão: escolhe em qual fatura a compra cai
         rots = [r for r, _ in faturas]
         atual = next((i for i, (_, d) in enumerate(faturas) if d == l["data_vencimento"]), 0)
@@ -700,7 +706,7 @@ def form_lancamento(u, lanc_id, faturas: list[tuple[str, date]] | None = None):
         repo.atualizar_lancamento(u, lanc_id, dict(descricao=desc.strip() or l["descricao"], valor=valor,
                                                    categoria_id=cat, conta_id=conta, data_compra=data,
                                                    data_vencimento=venc, status="pago" if pago else "previsto",
-                                                   nao_contar=nao_contar),
+                                                   nao_contar=nao_contar, variavel=variavel),
                                   futuras)
         st.session_state["_ui_ok"] = "Lançamento atualizado."
         st.rerun()

@@ -185,6 +185,20 @@ _MIGRACOES = [
           usos        int not null default 0,
           ultimo_uso  timestamptz,
           unique (tipo, impressao))"""),
+    # 016 — receita variável (comissão): enquanto prevista fica FORA do saldo/fluxo; quando recebida, conta normal.
+    #       Também na recorrência, para replicar a previsão nos meses.
+    ("select 1 from information_schema.columns where table_name = 'lancamentos' and column_name = 'variavel'",
+     """alter table lancamentos add column if not exists variavel boolean not null default false;
+        alter table recorrencias add column if not exists variavel boolean not null default false;
+        drop view if exists v_lancamentos;
+        create view v_lancamentos as
+        select l.*, coalesce(l.visibilidade, c.visibilidade, cp.visibilidade, k.visibilidade,
+                             'privado'::visibilidade) as visibilidade_efetiva,
+               coalesce(cp.nome, c.nome) as categoria, case when cp.id is not null then c.nome end as subcategoria,
+               k.nome as conta, u.nome as dono_nome, u.email as dono_email
+          from lancamentos l left join categorias c on c.id = l.categoria_id
+          left join categorias cp on cp.id = c.pai_id left join contas k on k.id = l.conta_id
+          join usuarios u on u.id = l.dono_id"""),
 ]
 
 
