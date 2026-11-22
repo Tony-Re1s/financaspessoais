@@ -627,6 +627,19 @@ def _fim_mes(d: date) -> date:
     return date(d.year, d.month, calendar.monthrange(d.year, d.month)[1])
 
 
+ORDEM = {"recentes": "↓ Mais recentes", "antigos": "↑ Mais antigos"}
+
+
+def ordem_data(chave: str, onde=None) -> bool:
+    """Seletor 'mais recentes / mais antigos primeiro'. A escolha vale para todas as telas de lista
+    (extrato, fatura, lançamentos) durante a sessão. Devolve True = mais recentes primeiro (padrão)."""
+    atual = st.session_state.get("_ordem_data", "recentes")
+    w = (onde or st).segmented_control("Ordem", list(ORDEM), format_func=ORDEM.get, default=atual,
+                                       key=f"ordem_{chave}", label_visibility="collapsed") or atual
+    st.session_state["_ordem_data"] = w
+    return w == "recentes"
+
+
 def periodo(chave: str, padrao="mes") -> tuple[date, date, str]:
     """Atalhos 7/15/30 dias, este mês, mês passado e personalizado. Devolve (início, fim, rótulo)."""
     hj = hoje()

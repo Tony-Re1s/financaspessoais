@@ -207,7 +207,12 @@ else:
     saldo_dia = ext.groupby("data")["saldo"].last()
     if v.empty:
         st.caption("Nada encontrado com esse filtro.")
-    for d in sorted(v["data"].unique(), reverse=True):
+    recentes = _ui.ordem_data("cc")
+    saldo_ant = (f"<div class='ui-grupo'><span>Saldo anterior ({ini - timedelta(days=1):%d/%m})</span>"
+                 f"<span>{brl(s_ini)}</span></div>")
+    if not recentes:
+        _ui.render(saldo_ant)
+    for d in sorted(v["data"].unique(), reverse=recentes):
         dia = v[v["data"] == d].sort_values("valor")
         rot = "Hoje" if d == hoje() else ("Ontem" if d == hoje() - timedelta(days=1) else
                                           f"{DIAS[d.weekday()]}, {d.day:02d} {MESES[d.month - 1]}")
@@ -233,8 +238,8 @@ else:
                 else:
                     acao = (lambda r=r: _ui.editar_lancamento(u, r["id"]))
                 _ui.linha_editavel(f"cc{i}", esq, _ui.valor_html(float(r["valor"]), prev), acao)
-    _ui.render(f"<div class='ui-grupo'><span>Saldo anterior ({ini - timedelta(days=1):%d/%m})</span>"
-               f"<span>{brl(s_ini)}</span></div>")
+    if recentes:
+        _ui.render(saldo_ant)
 
 # ---------------------------------------------------------------------------------------------
 # saldo real e conta principal

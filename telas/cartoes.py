@@ -207,7 +207,10 @@ else:
         bq = _ui.sem_acento(busca)
         it = it[it.apply(lambda r: bq in _ui.sem_acento(f"{r.descricao} {r.categoria}"), axis=1)]
     ICONE = {"Parcelas": "🧾", "Assinaturas": "🔁", "Compras": "🛍️"}
-    for grupo in ["Parcelas", "Assinaturas", "Compras"]:
+    recentes = _ui.ordem_data("cart")
+    it = it.assign(_d=pd.to_datetime(it["data_compra"])).sort_values(
+        ["_d", "valor"], ascending=[not recentes, False], na_position="last", kind="stable")
+    for grupo in ["Compras", "Assinaturas", "Parcelas"]:
         g = it[it["grupo"] == grupo]
         if g.empty:
             continue

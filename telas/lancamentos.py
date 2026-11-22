@@ -173,7 +173,7 @@ def _tabela(dfp: pd.DataFrame, aba: str):
         st.warning(f"**{len(_sc)} sem conta — não marquei como pago:** " + ", ".join(_sc[:8])
                    + ("…" if len(_sc) > 8 else "") + ". Escolha de qual conta saiu na coluna **Conta / cartão** "
                    "e toque de novo em ✅ Marcar pago.", icon=":material/account_balance:")
-    chave_ed = f"ed_lanc_{aba}_{ini}_{fim}_{escopo}_{len(dfp)}"
+    chave_ed = f"ed_lanc_{aba}_{ini}_{fim}_{escopo}_{len(dfp)}_{st.session_state.get('_ordem_data', 'recentes')}"
     with st.form(f"form_{chave_ed}", border=False):
         editado = st.data_editor(base, column_config=cfg, column_order=ordem, hide_index=True,
                                  use_container_width=True, height=min(600, 35 * len(base) + 40), key=chave_ed)
@@ -300,7 +300,6 @@ def _lista_celular(dfp: pd.DataFrame, aba: str):
     if dfp.empty:
         _ui.render("<div class='ui-tudo-ok'>Nada aqui no período e filtros escolhidos.</div>")
         return
-    dfp = dfp.sort_values("data_vencimento", ascending=(aba == "aberto"))
     lim_k = f"_lim_{aba}"
     lim = st.session_state.get(lim_k, 40)
     with st.container(key=f"llista_{aba}"):
@@ -334,6 +333,10 @@ def _lista_celular(dfp: pd.DataFrame, aba: str):
             st.rerun()
 
 
+_recentes = _ui.ordem_data("lanc")
+_dc = pd.to_datetime(df["data_compra"]) if "data_compra" in df else pd.to_datetime(df["data_vencimento"])
+df = df.assign(_dv=pd.to_datetime(df["data_vencimento"]), _dc=_dc.fillna(pd.to_datetime(df["data_vencimento"]))) \
+    .sort_values(["_dv", "_dc"], ascending=not _recentes, kind="stable").drop(columns=["_dv", "_dc"])
 _aberto = df[df["status"] != "pago"]
 _pagos = df[df["status"] == "pago"]
 t_ab, t_pg = st.tabs([f"⏳ A pagar ({len(_aberto)})", f"✅ Pagos ({len(_pagos)})"])
