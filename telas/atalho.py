@@ -109,9 +109,21 @@ de compra do banco ou da Google Carteira e manda para o app. O app separa valor,
 """)
     st.subheader("2. Crie a macro")
     st.markdown("""
-**Adicionar macro** → em **Gatilhos** toque **+** → **Notificação** → **Notificação recebida**:
-- **Aplicativos**: marque os bancos e a Google Carteira.
-- **Conteúdo do texto**: *Contém* → `R$` (assim só entram notificações com valor).
+**Adicionar macro** → em **Gatilhos** toque **+** → **Notificação** → **Notificação recebida**. Na janela que abre:
+- **Aplicativos**: toque no quadradinho de **grade** ao lado de *Todos os aplicativos* e marque só os bancos
+  e a Google Carteira (Nubank, Itaú, Santander, Mercado Pago, Neon, Carrefour…). Deixar *todos* faz entrar
+  mensagem de WhatsApp com "R$".
+- **Usar filtros de título e texto diferentes**: deixe **desmarcado**.
+- **Conteúdo do texto**: marque **Contém** e em *Texto a ser correspondido* escreva `R$`
+  (assim só entram notificações com valor).
+- **Ativar correspondência de expressão regular**: desmarcado.
+- **Ignorar maiúsculas/minúsculas**: marcado.
+- **Ignorar notificações em curso**: **marcado** (pula aquelas notificações fixas de "app em execução").
+- **Impedir múltiplos disparos**: **marcado** (a mesma compra não entra duas vezes).
+- **Som da notificação**: *Qualquer*. Toque **OK**.
+
+*Android 15 ou mais novo:* se a macro não disparar, desligue **Notificações aprimoradas** em
+Configurações → Notificações — ela pode esconder o texto das notificações de outros apps.
 """)
     st.markdown("Em **Ações** toque **+** → **Conectividade/Web** → **Requisição HTTP**:")
     st.markdown("**Método:** `POST`  \n**URL:**")
