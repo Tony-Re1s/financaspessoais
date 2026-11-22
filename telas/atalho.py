@@ -126,7 +126,7 @@ de compra do banco ou da Google Carteira e manda para o app. O app separa valor,
 *Android 15 ou mais novo:* se a macro não disparar, desligue **Notificações aprimoradas** em
 Configurações → Notificações — ela pode esconder o texto das notificações de outros apps.
 """)
-    st.markdown("Em **Ações** toque **+** → **Conectividade/Web** → **Requisição HTTP**:")
+    st.markdown("Em **Ações** toque **+** → **Interação Web** → **Requisição HTTP** (em versões antigas fica em *Conectividade*):")
     st.markdown("**Método:** `POST`  \n**URL:**")
     st.code(f"https://{host}/sql", language=None)
     st.markdown("**Cabeçalhos** (Headers) — adicione dois:")
