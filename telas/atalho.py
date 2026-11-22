@@ -112,7 +112,8 @@ de compra do banco ou da Google Carteira e manda para o app. O app separa valor,
 **Adicionar macro** → em **Gatilhos** toque **+** → **Notificação** → **Notificação recebida**. Na janela que abre:
 - **Aplicativos**: toque no quadradinho de **grade** ao lado de *Todos os aplicativos* e marque só os bancos
   e a Google Carteira (Nubank, Itaú, Santander, Mercado Pago, Neon, Carrefour…). Deixar *todos* faz entrar
-  mensagem de WhatsApp com "R$".
+  mensagem de WhatsApp com "R$". *Quer só as compras por aproximação?* Marque **só a carteira** que você usa
+  para pagar (Google Carteira ou Samsung Wallet).
 - **Usar filtros de título e texto diferentes**: deixe **desmarcado**.
 - **Conteúdo do texto**: marque **Contém** e em *Texto a ser correspondido* escreva `R$`
   (assim só entram notificações com valor).
