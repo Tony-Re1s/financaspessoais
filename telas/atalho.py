@@ -19,6 +19,54 @@ except Exception:  # noqa: BLE001
 host = urlparse(url_atalho).hostname
 tk = caixa.token(u)
 
+def _macro_android(host: str, token: str) -> str:
+    """Macro do MacroDroid (formato de exportação): notificação da carteira com "R$" → POST no Neon.
+    O cabeçalho com a conexão fica de fora — a pessoa cola pelo app (o formato dos cabeçalhos varia)."""
+    import json
+    import random
+    corpo = json.dumps({"query": "insert into caixa_entrada (token, origem, valor_texto, estabelecimento, cartao) "
+                                 "values ($1, 'android', $2, $3, $4)",
+                        "params": [token, "[notification]", "[notification_title]", "[app_name]"]},
+                       ensure_ascii=False)
+    gid = lambda: random.randint(-2**62, 2**62)  # noqa: E731
+    req = {"allFilesAccessPath": "", "allowAnyCertificate": False, "basicAuthEnabled": False,
+           "basicAuthPassword": "", "basicAuthUsername": "", "blockNextAction": False, "clientCertEnabled": False,
+           "clientCertKeyStoreDisplayName": "", "clientCertKeyStoreUri": "", "clientCertPassword": "",
+           "contentBodyDynamicFileName": "", "contentBodyFileDisplayName": "", "contentBodyFileUri": "",
+           "contentBodyFolderDisplayName": "", "contentBodyFolderUri": "", "contentBodySource": 0,
+           "contentBodyText": corpo, "contentType": "application/json", "followRedirects": True,
+           "headerParams": [], "localFileUri": "", "maxTotalDurationSeconds": 3600, "prettifyJson": False,
+           "proxyEnabled": False, "proxyHost": "", "proxyPort": 8080, "proxyType": 0, "queryParams": [],
+           "requestTimeOutSeconds": 30, "requestType": 1, "saveResponseAllFilesAccessPath": "",
+           "saveResponseFileName": "", "saveResponseFolderPathDisplayName": "", "saveResponseFolderPathUri": "",
+           "saveResponseType": 0, "saveResponseUseAllFilesAccess": False, "saveReturnCodeToVariable": False,
+           "saveReturnHeadersToVariable": False, "urlToOpen": f"https://{host}/sql", "useAllFilesAccess": False,
+           "useLocalFileUri": False, "useStaticContentBodyFile": True}
+    macro = {"aiGenerated": 0, "breakpoints": [], "disabledTimestamp": 0, "exportedActionBlocks": [],
+             "exportedSharedScenes": [], "forceEvenIfNotEnabledTimestamp": 0, "isActionBlock": False,
+             "isExtra": False, "isFavourite": False, "lastEditedTimestamp": 0, "localVariableSeparators": [],
+             "localVariables": [], "localVarsAlphabetical": True, "loggingLevel": 0, "m_GUID": gid(),
+             "m_actionList": [{"requestConfig": req, "disableLogging": False, "m_SIGUID": gid(),
+                               "m_classType": "HttpRequestAction", "m_constraintList": [], "m_isDisabled": False,
+                               "m_isOrCondition": False}],
+             "m_category": "Finanças", "m_completed": True, "m_constraintList": [], "m_description":
+                 "Manda as compras por aproximação para a Caixa de entrada do app de finanças.",
+             "m_descriptionOpen": False, "m_enabled": True, "m_excludeLog": False, "m_headingColor": 0,
+             "m_isOrCondition": False, "m_name": "Finanças · aproximação",
+             "m_triggerList": [{"enableRegex": False, "ignoreCase": True,
+                                "m_applicationNameList": ["Carteira do Google", "Samsung Wallet"],
+                                "m_exactMatch": False, "m_excludeApps": False, "m_excludes": False,
+                                "m_ignoreOngoing": True, "m_option": 0,
+                                "m_packageNameList": ["com.google.android.apps.walletnfcrel",
+                                                      "com.samsung.android.spay"],
+                                "m_soundOption": 0, "m_supressMultiples": True, "m_textContent": "R$",
+                                "matchOptionMessage": 0, "matchOptionTitle": 0, "separateTitleAndMessage": False,
+                                "disableLogging": False, "m_SIGUID": gid(), "m_classType": "NotificationTrigger",
+                                "m_constraintList": [], "m_isDisabled": False, "m_isOrCondition": False}]}
+    return json.dumps({"globalVariables": [], "macro": macro, "macroExportVersion": 1},
+                      ensure_ascii=False, separators=(",", ":"))
+
+
 aba_ios, aba_android = st.tabs(["🍎 iPhone (Apple Pay)", "🤖 Android"])
 
 with aba_ios:
@@ -107,8 +155,23 @@ de compra do banco ou da Google Carteira e manda para o app. O app separa valor,
 - Quando pedir, permita **Acesso a notificações** (Configurações → Notificações → Acesso a notificações → MacroDroid).
 - Nos apps dos bancos, deixe ligadas as **notificações de compra** (Nubank, Itaú, Inter… e a Google Carteira).
 """)
-    st.subheader("2. Crie a macro")
+    st.subheader("2. Baixe a macro pronta")
     st.markdown("""
+A macro já vem com o **seu token** e lê as compras por **aproximação** (Google Carteira e Samsung Wallet).
+1. Toque em **Baixar macro** e abra o arquivo com o **MacroDroid** (ou no MacroDroid: **☰ → Exportar/Importar → Importar**).
+2. Abra a macro → toque na ação **Requisição HTTP** → **Configurar** → deslize as abas até **Cabeçalhos** → **+**:
+   - **Nome:** `Neon-Connection-String`
+   - **Valor:** copie a caixa abaixo.
+3. Toque no **✓** e deixe a macro **ativada**.
+""")
+    st.download_button("Baixar macro", _macro_android(host, tk), file_name="Financas_Aproximacao.macro",
+                       mime="application/json", icon=":material/download:", type="primary")
+    st.caption("Valor do cabeçalho `Neon-Connection-String`:")
+    st.code(url_atalho, language=None)
+    st.caption("A macro é sua: o token dentro dela manda as compras para a **sua** Caixa de entrada. "
+               "Para outra pessoa, ela baixa aqui logada na conta dela.")
+    with st.expander("Prefere montar à mão, ou quer pegar também as notificações dos bancos?"):
+        st.markdown("""
 **Adicionar macro** → em **Gatilhos** toque **+** → **Notificação** → **Notificação recebida**. Na janela que abre:
 - **Aplicativos**: toque no quadradinho de **grade** ao lado de *Todos os aplicativos* e marque só os bancos
   e a Google Carteira (Nubank, Itaú, Santander, Mercado Pago, Neon, Carrefour…). Deixar *todos* faz entrar
@@ -126,19 +189,19 @@ de compra do banco ou da Google Carteira e manda para o app. O app separa valor,
 *Android 15 ou mais novo:* se a macro não disparar, desligue **Notificações aprimoradas** em
 Configurações → Notificações — ela pode esconder o texto das notificações de outros apps.
 """)
-    st.markdown("Em **Ações** toque **+** → **Interação Web** → **Requisição HTTP** (em versões antigas fica em *Conectividade*):")
-    st.markdown("**Método:** `POST`  \n**URL:**")
-    st.code(f"https://{host}/sql", language=None)
-    st.markdown("**Cabeçalhos** (Headers) — adicione dois:")
-    st.markdown("`Neon-Connection-String`")
-    st.code(url_atalho, language=None)
-    st.markdown("`Content-Type`")
-    st.code("application/json", language=None)
-    st.markdown("**Corpo** (Body, tipo *texto/JSON*) — copie e cole tudo:")
-    st.code('{"query": "insert into caixa_entrada (token, origem, valor_texto, estabelecimento, cartao) '
-            'values ($1, \'android\', $2, $3, $4)", '
-            f'"params": ["{tk}", "TEXTO", "TITULO", "APP"]}}', language="json")
-    st.markdown("""
+        st.markdown("Em **Ações** toque **+** → **Interação Web** → **Requisição HTTP** (em versões antigas fica em *Conectividade*):")
+        st.markdown("**Método:** `POST`  \n**URL:**")
+        st.code(f"https://{host}/sql", language=None)
+        st.markdown("**Cabeçalhos** (Headers) — adicione dois:")
+        st.markdown("`Neon-Connection-String`")
+        st.code(url_atalho, language=None)
+        st.markdown("`Content-Type`")
+        st.code("application/json", language=None)
+        st.markdown("**Corpo** (Body, tipo *texto/JSON*) — copie e cole tudo:")
+        st.code('{"query": "insert into caixa_entrada (token, origem, valor_texto, estabelecimento, cartao) '
+                'values ($1, \'android\', $2, $3, $4)", '
+                f'"params": ["{tk}", "TEXTO", "TITULO", "APP"]}}', language="json")
+        st.markdown("""
 Depois troque, **mantendo as aspas**, usando o botão **…** (texto mágico / *magic text*) do MacroDroid:
 - `TEXTO` → **Texto da notificação**
 - `TITULO` → **Título da notificação**
