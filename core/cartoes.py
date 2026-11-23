@@ -89,6 +89,23 @@ def pago_no_mes(u, mes: int) -> float:
     return float(r["v"]) if r else 0.0
 
 
+def conta_da_fatura(cartao_id, mes: int):
+    """Conta que paga esta fatura: a escolhida na hora de pagar, senão a padrão do cartão."""
+    r = db.um("""select coalesce(fc.conta_id, c.conta_pagamento_id) as conta from contas c
+                 left join fatura_conta fc on fc.cartao_id = c.id and fc.mes_ref = :m where c.id = :c""",
+              c=cartao_id, m=mes)
+    return r["conta"] if r else None
+
+
+def definir_conta_fatura(cartao_id, mes: int, conta_id):
+    """Grava de qual conta sai ESTA fatura (None ou a conta padrão do cartão = volta ao padrão)."""
+    db.executar("delete from fatura_conta where cartao_id = :c and mes_ref = :m", c=cartao_id, m=mes)
+    padrao = db.um("select conta_pagamento_id from contas where id = :c", c=cartao_id)
+    if conta_id and (not padrao or str(conta_id) != str(padrao["conta_pagamento_id"])):
+        db.executar("insert into fatura_conta (cartao_id, mes_ref, conta_id) values (:c, :m, :k)",
+                    c=cartao_id, m=mes, k=conta_id)
+
+
 def marcar_fatura(u, cartao_id, mes: int, paga: bool, data_pag=None):
     db.executar("""update lancamentos
                       set status = cast(:s as status_lancamento),
@@ -105,7 +122,7 @@ def total_fatura(u, cartao_id, mes: int) -> float:
     return float(r["v"]) if r else 0.0
 
 
-def pagar_fatura(u, cartao_id, mes: int, valor_pago: float, data_pag=None) -> float:
+def pagar_fatura(u, cartao_id, mes: int, valor_pago: float, data_pag=None, conta_id=None) -> float:
     """Paga a fatura inteira ou parte dela.
 
     Marca TODOS os lançamentos da fatura como pagos (o cartão já cobrou tudo) e, se o valor pago
@@ -116,6 +133,7 @@ def pagar_fatura(u, cartao_id, mes: int, valor_pago: float, data_pag=None) -> fl
     from sqlalchemy import text
     total = total_fatura(u, cartao_id, mes)
     resto = round(total - float(valor_pago), 2)
+    definir_conta_fatura(cartao_id, mes, conta_id)
     marcar_fatura(u, cartao_id, mes, True, data_pag)
     if resto <= 0.004:
         return 0.0

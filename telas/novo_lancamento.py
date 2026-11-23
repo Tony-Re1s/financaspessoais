@@ -19,8 +19,38 @@ contas = repo.contas(u)
 cats = repo.categorias(u)
 
 # --- o essencial, na ordem de um app de banco: tipo, valor, o quê, onde ----------------
-tipo = st.segmented_control("Tipo", ["despesa", "receita"], default="despesa", label_visibility="collapsed",
-                            format_func=lambda t: "💸 Despesa" if t == "despesa" else "💰 Receita") or "despesa"
+_ROT = {"despesa": "💸 Despesa", "receita": "💰 Receita", "transferencia": "🔁 Transferência"}
+tipo = st.segmented_control("Tipo", list(_ROT), default="despesa", label_visibility="collapsed",
+                            format_func=_ROT.get) or "despesa"
+
+if tipo == "transferencia":
+    # entre as próprias contas: sai de uma e entra na outra — não conta como despesa nem receita
+    cx = contas[contas["tipo"].isin(["conta_corrente", "carteira", "poupanca", "investimento"])].sort_values("nome")
+    op = {r.id: f"{r.nome} · {TIPOS_CONTA.get(r.tipo, r.tipo)}" for r in cx.itertuples()}
+    c1, c2 = st.columns(2)
+    de = c1.selectbox("De (sai)", list(op), format_func=op.get, index=None, placeholder="Conta de origem", key="t_de")
+    para = c2.selectbox("Para (entra)", [k for k in op if k != de], format_func=op.get, index=None,
+                        placeholder="Conta de destino", key="t_para")
+    c1, c2 = st.columns(2)
+    v_t = c1.number_input("Valor (R$)", min_value=0.0, step=10.0, format="%.2f", key="t_valor")
+    d_t = c2.date_input("Data", value=hoje(), format="DD/MM/YYYY", key="t_data")
+    nome = lambda k: contas.set_index("id").loc[k, "nome"] if k else ""  # noqa: E731
+    desc_t = st.text_input("Descrição", key="t_desc",
+                           placeholder=f"Transferência {nome(de)} → {nome(para)}" if de and para else "Opcional")
+    pago_t = st.toggle("Já foi feita", value=d_t <= hoje(), key=f"t_pago_{d_t}",
+                       help="Desligado = transferência programada (entra no fluxo de caixa como previsão).")
+    if de and para and v_t > 0:
+        st.caption(f"🔁 Sai {brl(v_t)} da **{nome(de)}** e entra na **{nome(para)}** em **{d_t:%d/%m/%Y}** · "
+                   f"não conta como despesa nem receita.")
+    if st.button("Salvar transferência", type="primary", icon=":material/save:", use_container_width=True,
+                 disabled=not (de and para and v_t > 0)):
+        repo.inserir_transferencia(u, de, para, v_t, d_t,
+                                   desc_t.strip() or f"Transferência {nome(de)} → {nome(para)}", pago_t)
+        st.session_state["_ok_lanc"] = f"Transferência salva: {brl(v_t)} de {nome(de)} para {nome(para)}."
+        for k in ("t_de", "t_para", "t_valor", "t_desc"):
+            st.session_state.pop(k, None)
+        st.rerun()
+    st.stop()
 
 c1, c2 = st.columns([2, 1])
 valor = c1.number_input("Valor (R$)", min_value=0.0, step=10.0, format="%.2f", key="f_valor")

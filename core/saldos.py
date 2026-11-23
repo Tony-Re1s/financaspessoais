@@ -43,13 +43,16 @@ def definir_conta_principal(u, conta_id):
 def _faturas(u, conta_ids: list) -> pd.DataFrame:
     """Uma linha por fatura (cartão × mês) dos cartões pagos por estas contas."""
     df = db.consultar("""
-        select card.id as cartao_id, card.nome as cartao, card.dia_vencimento, card.conta_pagamento_id as conta,
+        select card.id as cartao_id, card.nome as cartao, card.dia_vencimento,
+               coalesce(fc.conta_id, card.conta_pagamento_id) as conta,
                l.mes_ref, max(l.data_vencimento) as venc,
                sum(case when l.tipo = 'receita' then -l.valor else l.valor end) as total,
                bool_and(l.status = 'pago') as paga,
                max(l.data_pagamento) filter (where l.status = 'pago') as pag
           from lancamentos l join contas card on card.id = l.conta_id and card.tipo = 'cartao_credito'
-         where l.dono_id = :u and l.status <> 'cancelado' and card.conta_pagamento_id = any(:c)
+          left join fatura_conta fc on fc.cartao_id = card.id and fc.mes_ref = l.mes_ref
+         where l.dono_id = :u and l.status <> 'cancelado'
+           and coalesce(fc.conta_id, card.conta_pagamento_id) = any(:c)
          group by 1, 2, 3, 4, 5""", u=u["id"], c=list(conta_ids))
     if df.empty:
         return pd.DataFrame(columns=["id", "data", "descricao", "categoria", "valor", "status", "conta", "fonte"])

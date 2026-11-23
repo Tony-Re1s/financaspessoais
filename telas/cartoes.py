@@ -147,8 +147,8 @@ fech_d = dia_no_mes(venc_d.year, venc_d.month, fech) if fech else venc_d - timed
 if fech_d > venc_d:
     fech_d = (venc_d.replace(day=1) - timedelta(days=1)).replace(day=min(fech or 1, 28))
 it = cartoes.itens(u, sel, mes)
-pagadora = info.loc[c["conta_pagamento_id"], "nome"] if pd.notna(c.get("conta_pagamento_id")) and \
-    c["conta_pagamento_id"] in info.index else None
+_pg_id = cartoes.conta_da_fatura(sel, mes)
+pagadora = info.loc[_pg_id, "nome"] if _pg_id is not None and _pg_id in info.index else None
 fin = c.get("finais_cartao")
 sub = " · ".join(x for x in [c["instituicao"] or "",
                              f"final {str(fin).split(',')[0]}" if isinstance(fin, str) and fin[:1].isdigit() else "",
@@ -168,13 +168,23 @@ if not linha["paga"]:
                                  help="Pagou menos que o total? O restante vai para a próxima fatura como "
                                       "\"Saldo anterior\" — depois ajuste o valor com os juros que o banco cobrar.")
         d_pago = st.date_input("Pago em", value=min(hoje(), venc_d), format="DD/MM/YYYY", key=f"pg_d_{sel}_{mes}")
+        _cx = info[info["tipo"].isin(["conta_corrente", "carteira", "poupanca", "investimento"])]
+        _op_pg = {k: (f"{info.loc[k, 'nome']} (padrão)" if k == c.get("conta_pagamento_id") else info.loc[k, "nome"])
+                  for k in _cx.index}
+        _atual = cartoes.conta_da_fatura(sel, mes)
+        _lista = list(_op_pg)
+        conta_pg = st.selectbox("Pago pela conta", _lista, format_func=_op_pg.get,
+                                index=_lista.index(_atual) if _atual in _lista else None,
+                                placeholder="Escolha a conta", key=f"pg_c_{sel}_{mes}",
+                                help="Vem marcada a conta padrão do cartão. Escolha outra se pagou por ela — "
+                                     "vale só para esta fatura.")
         resto_prev = round(total_fat - v_pago, 2)
         if resto_prev > 0.004:
             st.caption(f"Vai para a fatura de **{mes_label(somar_meses(mes, 1))}**: {brl(resto_prev)}")
         elif resto_prev < -0.004:
             st.caption(f"Pagou {brl(-resto_prev)} a mais que a fatura — fica como crédito? Por enquanto só marca paga.")
         if st.button("Confirmar pagamento", type="primary", use_container_width=True, key=f"pg_ok_{sel}_{mes}"):
-            resto = cartoes.pagar_fatura(u, sel, mes, min(v_pago, total_fat), d_pago)
+            resto = cartoes.pagar_fatura(u, sel, mes, min(v_pago, total_fat), d_pago, conta_pg)
             st.session_state["_ui_ok"] = (f"Fatura de {mes_label(mes)} do {c['nome']} paga." if not resto else
                                           f"Fatura de {mes_label(mes)} do {c['nome']}: pago {brl(v_pago)}, "
                                           f"{brl(resto)} foi para a fatura de {mes_label(somar_meses(mes, 1))}.")
@@ -182,6 +192,7 @@ if not linha["paga"]:
 else:
     if a1.button("Reabrir fatura", icon=":material/undo:", use_container_width=True):
         cartoes.marcar_fatura(u, sel, mes, False)
+        cartoes.definir_conta_fatura(sel, mes, None)
         st.rerun()
 a2.page_link("telas/importar_fatura.py", label="Importar fatura", icon=":material/upload:")
 a3.page_link("telas/novo_lancamento.py", label="Lançar compra", icon=":material/add:")

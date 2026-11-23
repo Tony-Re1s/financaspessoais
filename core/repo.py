@@ -209,6 +209,17 @@ def inserir_lancamentos(u, linhas: list[dict]) -> int:
     return len(linhas)
 
 
+def inserir_transferencia(u, origem_id, destino_id, valor: float, data, descricao: str, pago: bool) -> None:
+    """Transferência entre contas próprias: sai de uma e entra na outra (não é despesa nem receita)."""
+    db.executar("""
+        insert into lancamentos (dono_id, conta_id, conta_destino_id, tipo, descricao, valor, data_compra,
+                                 data_vencimento, forma_pagamento, status, data_pagamento, origem)
+        values (:u, :o, :d, 'transferencia', :desc, :v, :dt, :dt, 'Transferencia',
+                cast(:st as status_lancamento), case when :st = 'pago' then cast(:dt as date) end, 'manual')""",
+                u=u["id"], o=origem_id, d=destino_id, v=float(valor), dt=data, desc=descricao,
+                st="pago" if pago else "previsto")
+
+
 def mudar_status(u, ids: list, status: str):
     db.executar("""update lancamentos
                       set status = cast(:st as status_lancamento),

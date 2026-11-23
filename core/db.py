@@ -199,6 +199,13 @@ _MIGRACOES = [
           from lancamentos l left join categorias c on c.id = l.categoria_id
           left join categorias cp on cp.id = c.pai_id left join contas k on k.id = l.conta_id
           join usuarios u on u.id = l.dono_id"""),
+    # 017 — fatura paga por outra conta que não a padrão do cartão (escolhida na hora de pagar)
+    ("select 1 from information_schema.tables where table_name = 'fatura_conta'",
+     """create table if not exists fatura_conta (
+          cartao_id  uuid not null references contas(id) on delete cascade,
+          mes_ref    int not null,
+          conta_id   uuid not null references contas(id) on delete cascade,
+          primary key (cartao_id, mes_ref))"""),
 ]
 
 
