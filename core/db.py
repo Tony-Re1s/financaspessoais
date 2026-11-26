@@ -206,6 +206,27 @@ _MIGRACOES = [
           mes_ref    int not null,
           conta_id   uuid not null references contas(id) on delete cascade,
           primary key (cartao_id, mes_ref))"""),
+    # 018 — financiamento na fase de obra: juros fixos + TR sobre o saldo devedor, projetado até o fim da obra
+    ("select 1 from information_schema.tables where table_name = 'financiamentos'",
+     """create table if not exists financiamentos (
+          id              uuid primary key default gen_random_uuid(),
+          dono_id         uuid not null references usuarios(id) on delete cascade,
+          nome            text not null,
+          descricao_lanc  text not null,
+          conta_id        uuid references contas(id) on delete set null,
+          categoria_id    uuid references categorias(id) on delete set null,
+          forma_pagamento text,
+          dia_venc        int not null,
+          taxa_am         numeric not null,
+          fixos           numeric not null default 0,
+          saldo           numeric not null,
+          data_saldo      date not null,
+          tr_modo         text not null default 'bcb',
+          tr_manual       numeric,
+          ultimo_boleto   numeric,
+          fim_obra        date,
+          cronograma      jsonb not null default '{}',
+          criado_em       timestamptz not null default now())"""),
 ]
 
 
