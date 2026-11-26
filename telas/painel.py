@@ -166,6 +166,53 @@ with st.container(key="casc_barra"):
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             use_container_width=True, key="casc_xlsx")
 
+# --- filtro por categoria / subcategoria: quanto foi (e vai) em cada mês, conta + cartão --------------
+_cats = db.consultar("""
+    select coalesce(pai.nome, c.nome) as cat, case when pai.id is not null then c.nome end as sub
+      from categorias c left join categorias pai on pai.id = c.pai_id
+     where c.dono_id = :u order by 1, 2 nulls first""", u=u["id"])
+_ops = []
+for r in _cats.itertuples():
+    _ops.append(r.cat if not isinstance(r.sub, str) else f"{r.cat} › {r.sub}")
+_ops = list(dict.fromkeys(_ops))
+filtro_cat = st.multiselect("Filtrar por categoria ou subcategoria", _ops, key="painel_cat",
+                            placeholder="Escolha categorias (ex.: Alimentacao, Transporte › Combustivel)",
+                            help="Mostra, mês a mês, quanto saiu (ou entrou) só no que você escolher — inclui as "
+                                 "compras do cartão, no mês da fatura. Escolher a categoria pega todas as "
+                                 "subcategorias dela.")
+if filtro_cat:
+    _lc = db.consultar("""
+        select l.mes_ref as mes, coalesce(pai.nome, c.nome, 'Sem categoria') as cat,
+               case when pai.id is not null then c.nome end as sub,
+               sum(case when l.tipo = 'receita' then l.valor else -l.valor end) as v
+          from lancamentos l left join categorias c on c.id = l.categoria_id
+          left join categorias pai on pai.id = c.pai_id
+         where l.dono_id = :u and l.status <> 'cancelado' and l.tipo in ('despesa', 'receita')
+           and not coalesce(l.nao_contar, false) and l.mes_ref between :a and :b
+           and not (coalesce(l.variavel, false) and l.status = 'previsto' and not :var)
+         group by 1, 2, 3""", u=u["id"], a=meses[0], b=meses[-1], var=com_var)
+    linhas_f, uniao = [], pd.Series(False, index=_lc.index)
+    for item in filtro_cat:
+        c_, _, s_ = item.partition(" › ")
+        m_ = (_lc["cat"] == c_) & ((_lc["sub"] == s_) if s_ else True)
+        uniao |= m_
+        d_ = _lc[m_]
+        linhas_f.append({"Categoria": item, **{mes_label(m): float(d_.loc[d_["mes"] == m, "v"].sum()) for m in meses}})
+    tf = pd.DataFrame(linhas_f).set_index("Categoria")
+    if len(tf) > 1:   # total sem contar duas vezes (categoria + subcategoria dela escolhidas juntas)
+        d_ = _lc[uniao]
+        tf.loc["Total"] = [float(d_.loc[d_["mes"] == m, "v"].sum()) for m in meses]
+    _fmt = lambda v: "—" if abs(v) < 0.004 else ("+ " if v > 0 else "") + brl(abs(v))  # noqa: E731
+    st.dataframe(tf.map(_fmt), use_container_width=True,
+                 column_config={"Categoria": st.column_config.TextColumn("Categoria", width="medium"),
+                                mes_label(atual): st.column_config.TextColumn(f"{mes_label(atual)} · hoje")})
+    _passado = [mes_label(m) for m in meses if m < atual]
+    if _passado:
+        _media = tf[_passado].mean(axis=1)
+        st.caption("Saídas sem sinal, entradas com +. Meses depois de hoje = o que já está lançado ou previsto. "
+                   "Média dos meses passados: " + " · ".join(f"**{k}** {brl(abs(v))}" for k, v in _media.items())
+                   .replace("$", "\\$"))
+
 # simulação: gasto extra por mês e/ou retirada única
 with st.expander("E se…? (simular)", icon=":material/tune:"):
     s1, s2, s3 = st.columns(3)

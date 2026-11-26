@@ -499,10 +499,14 @@ setInterval(function(){try{
 }catch(e){}},2000);
 }catch(e){}})();
 (function(){try{
-const P=window.parent; if(!P||P===window) return; const d=P.document;
+const P=window.parent; if(!P||P===window) return;
+/* no Streamlit Cloud o app roda num iframe dentro da página do streamlit.app (mesmo domínio): o Safari do Mac
+   ("Adicionar ao Dock") e o iPhone leem o ícone da página DE CIMA, que traz a coroa — corrige as duas */
+const DOCS=[P.document]; try{const Tp=window.top; if(Tp&&Tp!==P&&Tp.document) DOCS.push(Tp.document);}catch(e){}
 const T="Finanças", L=window.location, k=L.pathname.indexOf("/~/+/");
 const B=L.origin+(k>=0? L.pathname.slice(0,k)+"/~/+/" : "/");   /* no Streamlit Cloud o app (e o /app/static) mora em /~/+/ */
 const I=B+"app/static/icone-180.png";
+for(const d of DOCS){(function(d){
 function link(rel){let l=d.head.querySelector('link[rel="'+rel+'"]'); if(!l){l=d.createElement('link'); l.rel=rel; d.head.appendChild(l);} return l;}
 function meta(n,v){let m=d.head.querySelector('meta[name="'+n+'"]'); if(!m){m=d.createElement('meta'); m.name=n; d.head.appendChild(m);} if(m.content!==v) m.content=v;}
 function fix(){
@@ -519,9 +523,10 @@ function fix(){
     d.head.appendChild(s);}
 }
 fix();
-P.__finFix=fix;
-if(P.__finMarca&&!P.__finMarca2){P.__finMarca.disconnect();}
-if(!P.__finMarca2){P.__finMarca2=new P.MutationObserver(()=>P.__finFix()); P.__finMarca2.observe(d.head,{subtree:true,childList:true,characterData:true,attributes:true});}
+const W=d.defaultView; W.__finFix=fix;
+if(W.__finMarca&&!W.__finMarca2){W.__finMarca.disconnect();}
+if(!W.__finMarca2){W.__finMarca2=new W.MutationObserver(()=>W.__finFix()); W.__finMarca2.observe(d.head,{subtree:true,childList:true,characterData:true,attributes:true});}
+})(d);}
 }catch(e){}})();</script>"""
 
 
